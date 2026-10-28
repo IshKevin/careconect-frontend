@@ -17,7 +17,14 @@ export type Invoice = {
   paidAt?: string; // ISO
   pdfUrl?: string;
   notes?: string;
-  planId?: string;
+};
+
+export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'reversed' | 'invalid';
+
+export type InitiatePaymentResult = {
+  referenceId: string;
+  redirectUrl: string;
+  status: 'pending';
 };
 
 export function useInvoices(userId: string) {
@@ -33,14 +40,36 @@ export function useInvoices(userId: string) {
 }
 
 /**
- * Hook for initiating an internal payment record (if needed by the backend).
- * In the Taag flow, we primarily redirect, but maybe the backend wants to know.
+ * Starts a Pesapal checkout for an invoice. The caller redirects the browser
+ * to `redirectUrl` on success.
  */
 export function useInitiatePayment() {
     return useMutation({
-        mutationFn: async (data: { invoiceId: string; paymentMethod: string; phoneNumber?: string }) => {
-            const res = await api.post('/payments/initiate', data);
-            return res.data;
+        mutationFn: async (data: { invoiceId: string }) => {
+            const res = await api.post('/payments/initiate', { invoiceId: data.invoiceId });
+            return res.data.data as InitiatePaymentResult;
         },
     });
+}
+
+/**
+ * Downloads an invoice as a PDF through the authenticated API client, then saves it.
+ * The backend enforces ownership, so a patient can only download their own invoices.
+ */
+export async function downloadInvoicePdf(invoiceId: string, invoiceNumber?: string): Promise<void> {
+    const res = await api.get(`/invoice/invoices/${invoiceId}/download`, { responseType: 'blob' });
+    const url = URL.createObjectURL(res.data as Blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${invoiceNumber ?? invoiceId}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+}
+
+/** Reads the message from a backend error ({ error: { message } }) or an older shape ({ message }). */
+export function apiErrorMessage(error: unknown, fallback: string): string {
+    const data = (error as { response?: { data?: { message?: string; error?: { message?: string } } } })?.response?.data;
+    return data?.error?.message ?? data?.message ?? fallback;
 }

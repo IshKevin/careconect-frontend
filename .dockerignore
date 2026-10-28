@@ -1,0 +1,16 @@
+node_modules
+.next
+out
+build
+coverage
+.git
+.env
+.env.*
+!.env.example
+build_*.txt
+curl_out*.txt
+out.html
+eslint_report.txt
+build_log.txt
+Dockerfile
+.dockerignore

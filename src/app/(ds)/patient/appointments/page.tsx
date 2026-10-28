@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuthHooks } from '@/hooks/useAuth';
 import api from '@/lib/api/api';
 import { Calendar, Clock, Stethoscope, UserRound, Search, RotateCcw, Plus, X } from 'lucide-react';
+import VideoCall from '@/components/consultation/VideoCall';
 
 interface Doctor {
   doctorId: string;
@@ -16,6 +17,7 @@ interface Appointment {
   appointmentId: string;
   doctorId: string;
   appointmentType: string;
+  appointmentStatus?: string;
   scheduledDate: string;
   scheduledTime: string;
   reason: string;
@@ -610,6 +612,12 @@ export default function PatientAppointmentsPage() {
                     </button>
                     <span className="self-center text-xs text-gray-400">ID: {a.appointmentId}</span>
                   </div>
+
+                  {a.appointmentStatus !== 'cancelled' && (
+                    <div className="mt-3">
+                      <VideoCall appointmentId={a.appointmentId} />
+                    </div>
+                  )}
 
                   {selectedAppointmentId === a.appointmentId && (
                     <div className="mt-4 grid gap-6 rounded-xl border border-black/5 bg-gray-50 p-4 md:grid-cols-2">

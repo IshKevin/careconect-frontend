@@ -7,7 +7,7 @@ if (typeof globalThis !== 'undefined' && globalThis.localStorage && typeof globa
 }
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: 'standalone',
 };
 
 export default nextConfig;

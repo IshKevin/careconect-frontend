@@ -4,10 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuthHooks } from '@/hooks/useAuth';
 import api from '@/lib/api/api';
 import { Download, FileText, RefreshCcw, Search, CreditCard } from 'lucide-react';
-import { initiateTaagPayment } from '@/lib/api/taag';
+import { apiErrorMessage, downloadInvoicePdf, useInitiatePayment } from '@/hooks/usePayments';
 
 type Invoice = {
   invoiceId: string;
+  invoiceNumber?: string;
+  invoiceStatus?: 'pending' | 'paid' | 'cancelled';  // what the API returns
+  invoiceDate?: string;  // YYYY-MM-DD
   totalAmount: number | string;
   currency?: string;
   dueDate?: string;      // ISO
@@ -16,11 +19,11 @@ type Invoice = {
   paidAt?: string;       // ISO
   pdfUrl?: string;
   notes?: string;
-  planId?: string;       // For Taag payment
 };
 
 export default function InvoicesPage() {
   const { user } = useAuthHooks();
+  const initiatePayment = useInitiatePayment();
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(false);
@@ -62,8 +65,9 @@ export default function InvoicesPage() {
   const fmtDate = (d?: string) => (d ? new Date(d).toLocaleDateString() : '—');
   
   const deriveStatus = (inv: Invoice) => {
-    const s = (inv.status ?? '').toLowerCase();
+    const s = (inv.invoiceStatus ?? inv.status ?? '').toLowerCase();
     if (s === 'paid') return 'paid';
+    if (s === 'cancelled') return 'cancelled';
     if (inv.paidAt) return 'paid';
     const due = inv.dueDate ? new Date(inv.dueDate) : null;
     if (due && due.getTime() < Date.now()) return 'overdue';
@@ -76,6 +80,7 @@ export default function InvoicesPage() {
       paid: `${base} bg-emerald-50 text-emerald-700 ring-emerald-200`,
       unpaid: `${base} bg-amber-50 text-amber-700 ring-amber-200`,
       overdue: `${base} bg-rose-50 text-rose-700 ring-rose-200`,
+      cancelled: `${base} bg-gray-100 text-gray-600 ring-gray-200`,
     };
     return <span className={map[s] ?? `${base} bg-gray-100 text-gray-700 ring-gray-200`}>{s}</span>;
   };
@@ -139,19 +144,17 @@ export default function InvoicesPage() {
   };
 
   const handlePay = (inv: Invoice) => {
-    const planId = inv.planId || process.env.NEXT_PUBLIC_TAAG_PLAN_ID;
-    
-    if (!planId) {
-      console.error('Taag Payment Error: No planId found on invoice and NEXT_PUBLIC_TAAG_PLAN_ID is not set in environment.');
-      alert('Payment configuration is missing. Please contact support.');
-      return;
-    }
-
-    initiateTaagPayment(planId, {
-      email: user.email,
-      firstname: user.profile?.firstName,
-      lastname: user.profile?.lastName,
-    });
+    initiatePayment.mutate(
+      { invoiceId: inv.invoiceId },
+      {
+        onSuccess: (result) => {
+          window.location.href = result.redirectUrl;
+        },
+        onError: (err) => {
+          alert(apiErrorMessage(err, 'Could not start the payment. Please try again.'));
+        },
+      },
+    );
   };
 
   return (
@@ -269,7 +272,7 @@ export default function InvoicesPage() {
 
                   {!loading && filtered.map((inv, idx) => {
                     const s = deriveStatus(inv);
-                    const isUnpaid = s !== 'paid';
+                    const isUnpaid = s === 'unpaid' || s === 'overdue';
                     
                     return (
                       <tr key={inv.invoiceId} className={`${idx % 2 ? 'bg-white' : 'bg-gray-50/30'}`}>
@@ -311,6 +314,7 @@ export default function InvoicesPage() {
                               <button
                                 type="button"
                                 onClick={() => handlePay(inv)}
+                                disabled={initiatePayment.isPending}
                                 className="inline-flex items-center gap-1 rounded-lg bg-[var(--brand)] px-2.5 py-1.5 text-xs font-semibold text-gray-900 ring-1 ring-black/10 hover:bg-[#b3d8d8] shadow-sm"
                               >
                                 <CreditCard className="h-4 w-4" /> Pay Now
@@ -318,7 +322,7 @@ export default function InvoicesPage() {
                             ) : (
                               <button
                                 type="button"
-                                onClick={() => alert('Exporting invoice...')}
+                                onClick={() => downloadInvoicePdf(inv.invoiceId, inv.invoiceNumber).catch((err) => alert(apiErrorMessage(err, 'Could not download the invoice. Please try again.')))}
                                 className="inline-flex items-center gap-1 rounded-lg border border-black/10 bg-white px-2.5 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
                               >
                                 <Download className="h-4 w-4" /> Export

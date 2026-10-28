@@ -21,10 +21,10 @@ export default function PreferencesPage() {
       setLoading(true);
       setError(null);
       try {
-        const response: any = await api.get('/patient/preferences');
+        const response = (await api.get('/patient/preferences')) as { data?: Preferences } | null;
         // Our api.get returns response.data. If the backend wraps it again:
-        const data = response?.data || response || null;
-        setPreferences(data as Preferences);
+        const data = response?.data ?? response;
+        setPreferences(data as unknown as Preferences);
       } catch (err: unknown) {
         console.error('Fetch preferences error:', err);
       } finally {

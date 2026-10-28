@@ -37,13 +37,15 @@ export default function DoctorSchedulePage() {
     setLoading(true);
     setError(null);
     try {
-      // Assuming endpoint exists or provides empty array if not
-      const response = await api.get(`/doctor/schedule/${user.userId}`);
+      if (!user.doctorId) {
+        setSlots([]);
+        return;
+      }
+      const response = await api.get(`/schedule/doctors/${user.doctorId}/availability`);
       const data = response.data?.data || response.data || [];
       setSlots(Array.isArray(data) ? data : []);
     } catch (err: unknown) {
       console.error('Fetch schedule error:', err);
-      // For now, if endpoint doesn't exist, we'll just show empty state
       setSlots([]);
     } finally {
       setLoading(false);

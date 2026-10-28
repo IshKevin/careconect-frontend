@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuthHooks } from '@/hooks/useAuth';
 import api from '@/lib/api/api';
 import { Appointment } from '@/types/appointment';
+import VideoCall from '@/components/consultation/VideoCall';
 
 export default function DoctorAppointmentsPage() {
   const { user } = useAuthHooks();
@@ -78,15 +79,20 @@ export default function DoctorAppointmentsPage() {
                     Scheduled: {appointment.scheduledDate}
                   </p>
                 </div>
-                <button
-                  className="px-4 py-2 text-sm font-medium rounded-lg hover:opacity-90 transition"
-                  style={{
-                    backgroundColor: '#C4E1E1',
-                    color: '#1A1A1A',
-                  }}
-                >
-                  View Details
-                </button>
+                <div className="flex items-center gap-2">
+                  {appointment.status !== 'cancelled' && (
+                    <VideoCall appointmentId={appointment.appointmentId} />
+                  )}
+                  <button
+                    className="px-4 py-2 text-sm font-medium rounded-lg hover:opacity-90 transition"
+                    style={{
+                      backgroundColor: '#C4E1E1',
+                      color: '#1A1A1A',
+                    }}
+                  >
+                    View Details
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
