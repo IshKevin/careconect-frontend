@@ -24,6 +24,7 @@ export default function Sidebar() {
         { name: 'Allergies', href: '/patient/allergies' },
         { name: 'Medications', href: '/patient/medications' },
         { name: 'Preferences', href: '/patient/preferences' },
+        { name: 'Sponsors', href: '/patient/sponsors' },
         { name: 'Invoices', href: '/patient/invoices' },
         { name: 'Profile', href: '/patient/profile' },
         { name: 'Search Doctors', href: '/patient/search/doctors' },
@@ -35,10 +36,19 @@ export default function Sidebar() {
         { name: 'Users', href: '/admin/users' },
         { name: 'Doctors', href: '/admin/doctors' },
         { name: 'Reports', href: '/admin/reports' },
+        { name: 'Facilities', href: '/admin/facilities' },
+        { name: 'Refunds', href: '/admin/refunds' },
+        { name: 'Reconciliation', href: '/admin/reconciliation' },
         { name: 'Appointments', href: '/admin/appointments' },
         { name: 'Audit Logs', href: '/admin/audit-logs' },
         { name: 'Settings', href: '/admin/settings' },
         { name: 'Profile', href: '/admin/profile' },
+      ];
+    }
+    if (user?.userType === 'sponsor') {
+      return [
+        { name: 'Dashboard', href: '/sponsor' },
+        { name: 'Patient Links', href: '/sponsor/links' },
       ];
     }
     if (user?.userType === 'doctor') {

@@ -9,7 +9,7 @@ export interface User {
   userId: string;
   email: string;
   phoneNumber: string;
-  userType: 'patient' | 'admin' | 'doctor';
+  userType: 'patient' | 'admin' | 'doctor' | 'sponsor';
   accountStatus: 'active' | 'suspended' | 'pending';
   emailVerified: boolean | null;
   phoneVerified: boolean | null;
@@ -25,7 +25,7 @@ export interface CreateUserRequest {
   email: string;
   phoneNumber: string;
   password: string;
-  userType: 'patient' | 'admin' | 'doctor';
+  userType: 'patient' | 'admin' | 'doctor' | 'sponsor';
   firstName: string;
   lastName: string;
   accountStatus?: 'active' | 'suspended' | 'pending';

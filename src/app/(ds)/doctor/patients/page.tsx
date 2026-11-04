@@ -24,7 +24,7 @@ export default function PatientsPage() {
     const fetchPatients = async () => {
       setLoading(true);
       try {
-        const response = await api.get('/users/patients');
+        const response = await api.get('/provider/patients');
         setPatients(response.data.data);
       } catch (err: unknown) {
         let msg = 'Failed to fetch patients';

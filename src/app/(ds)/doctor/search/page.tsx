@@ -30,7 +30,7 @@ export default function SearchPatientsPage() {
       setLoading(true);
       setError(null);
       try {
-        const response = await api.get('/users/patients');
+        const response = await api.get('/provider/patients');
         const data = response.data?.data || response.data || [];
         setPatients(Array.isArray(data) ? data : []);
       } catch (err: unknown) {

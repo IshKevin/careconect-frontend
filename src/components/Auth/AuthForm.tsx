@@ -29,7 +29,7 @@ const registerSchema = z.object({
     .string()
     .min(10, 'Phone number must be at least 10 digits')
     .regex(/^\+?\d+$/, 'Invalid phone number'),
-  userType: z.literal('patient'),
+  userType: z.enum(['patient', 'sponsor']),
 });
 
 export function AuthForm({ type }: AuthFormProps) {
@@ -121,8 +121,16 @@ export function AuthForm({ type }: AuthFormProps) {
               required
             />
 
-            {/* keep hidden userType exactly as before */}
-            <input type="hidden" {...register('userType')} />
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium text-gray-700">I am registering as</legend>
+              <label className="flex items-center gap-2 text-sm text-gray-800">
+                <input type="radio" value="patient" {...register('userType')} /> A patient receiving care
+              </label>
+              <label className="flex items-center gap-2 text-sm text-gray-800">
+                <input type="radio" value="sponsor" {...register('userType')} /> A sponsor paying for a relative&apos;s care
+              </label>
+              {errors.userType && <p className="text-sm text-red-600">{(errors.userType as any).message}</p>}
+            </fieldset>
           </>
         )}
 

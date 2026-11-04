@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 
 interface UserCookie {
   userId: string;
-  userType: 'admin' | 'doctor' | 'patient';
+  userType: 'admin' | 'doctor' | 'patient' | 'sponsor';
   email: string;
   patientId?: string;
   doctorId?: string;
@@ -34,7 +34,8 @@ export function middleware(request: NextRequest) {
   const isPatientPath = pathname.startsWith('/patient');
   const isDoctorPath = pathname.startsWith('/doctor');
   const isAdminPath = pathname.startsWith('/admin');
-  const isDashboardPath = isPatientPath || isDoctorPath || isAdminPath;
+  const isSponsorPath = pathname.startsWith('/sponsor');
+  const isDashboardPath = isPatientPath || isDoctorPath || isAdminPath || isSponsorPath;
 
   // 3. Handle Authentication Logic
   
@@ -48,7 +49,7 @@ export function middleware(request: NextRequest) {
   // If user is logged in but tries to access login/register
   if (isAuthPage && token && user) {
     // Redirect to their respective dashboard
-    const roleBase = user.userType === 'admin' ? '/admin' : user.userType === 'doctor' ? '/doctor' : '/patient';
+    const roleBase = user.userType === 'admin' ? '/admin' : user.userType === 'doctor' ? '/doctor' : user.userType === 'sponsor' ? '/sponsor' : '/patient';
     return NextResponse.redirect(new URL(roleBase, request.url));
   }
 
@@ -60,6 +61,10 @@ export function middleware(request: NextRequest) {
     }
     if (isDoctorPath && user.userType !== 'doctor') {
       const target = user.userType === 'admin' ? '/admin' : '/patient';
+      return NextResponse.redirect(new URL(target, request.url));
+    }
+    if (isSponsorPath && user.userType !== 'sponsor') {
+      const target = user.userType === 'admin' ? '/admin' : user.userType === 'doctor' ? '/doctor' : '/patient';
       return NextResponse.redirect(new URL(target, request.url));
     }
     if (isAdminPath && user.userType !== 'admin') {

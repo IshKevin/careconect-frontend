@@ -63,7 +63,7 @@ export default function RegisterPage() {
                   />
                 </svg>
               </div>
-              <span className="text-xl font-semibold tracking-tight">CareConnect</span>
+              <span className="text-xl font-semibold tracking-tight">IsanoMed</span>
             </div>
 
             {/* Headline */}
@@ -126,7 +126,7 @@ export default function RegisterPage() {
                   />
                 </svg>
               </div>
-              <h1 className="text-2xl font-semibold tracking-tight">CareConnect</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">IsanoMed</h1>
               <p className="mt-1 text-sm text-gray-600">Sign up for free</p>
             </div>
 

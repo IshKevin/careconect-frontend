@@ -4,7 +4,7 @@ export async function GET() {
   return NextResponse.json({
     success: true,
     data: {
-      appName: 'CareConnect',
+      appName: 'IsanoMed',
       supportEmail: 'support@careconnect.demo',
       timezone: 'Africa/Kigali',
       sessionTimeoutMins: 30,

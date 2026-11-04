@@ -65,7 +65,7 @@ export default function LoginPage() {
                   />
                 </svg>
               </div>
-              <span className="text-xl font-semibold tracking-tight">CareConnect</span>
+              <span className="text-xl font-semibold tracking-tight">IsanoMed</span>
             </div>
 
             {/* Headline */}
@@ -155,7 +155,7 @@ export default function LoginPage() {
                   />
                 </svg>
               </div>
-              <h1 className="text-2xl font-semibold tracking-tight">CareConnect</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">IsanoMed</h1>
               <p className="mt-1 text-sm text-gray-600">Welcome back — log in to continue</p>
             </div>
 

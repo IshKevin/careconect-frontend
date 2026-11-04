@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { Appointment } from '../types/appointment';
 import * as AppointmentAPI from '../lib/api/appointments';
 import {
     RescheduleAppointmentRequest,
@@ -31,6 +32,8 @@ export function useMyAppointments() {
     return useQuery({
         queryKey: APPOINTMENT_KEYS.my(),
         queryFn: AppointmentAPI.getMyAppointments,
+        // The API wraps lists in { success, data }; hand consumers the array.
+        select: (res: unknown): Appointment[] => (Array.isArray(res) ? res : ((res as { data?: Appointment[] })?.data ?? [])),
     });
 }
 

@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuthHooks } from '@/hooks/useAuth';
 import api from '@/lib/api/api';
-import { getUsersByType } from '@/lib/api/users';
 import { User } from '@/types/user';
 import { 
   FilePlus2, 
@@ -39,7 +38,8 @@ export default function DoctorInvoicesPage() {
     const fetchPatients = async () => {
       setLoadingPatients(true);
       try {
-        const data = await getUsersByType('patient');
+        const response = await api.get('/provider/patients');
+        const data = response.data?.data;
         setPatients(Array.isArray(data) ? data : []);
       } catch (err: unknown) {
         console.error('Failed to fetch patients:', err);

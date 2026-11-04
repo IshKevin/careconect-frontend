@@ -20,7 +20,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
-    if (error.response?.status === 401) {
+    // Only a signed-in session that has expired should send the user to log in again.
+    // Auth calls (for example a bad verification token) report their own errors.
+    const url = error.config?.url ?? '';
+    const hadSession = Boolean(error.config?.headers?.Authorization);
+    if (error.response?.status === 401 && hadSession && !url.startsWith('/auth/')) {
       safeLocalStorage.removeItem('accessToken');
       safeLocalStorage.removeItem('refreshToken');
       safeLocalStorage.removeItem('user');

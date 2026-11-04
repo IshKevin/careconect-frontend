@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { Medication } from '../types/patient';
 import * as PatientAPI from '../lib/api/patient';
 import {
     CreateMedicationRequest
@@ -93,6 +94,8 @@ export function useMedications() {
     return useQuery({
         queryKey: PATIENT_KEYS.medications(),
         queryFn: PatientAPI.getMedications,
+        // The API wraps lists in { success, data }; hand consumers the array.
+        select: (res: unknown): Medication[] => (Array.isArray(res) ? res : ((res as { data?: Medication[] })?.data ?? [])),
     });
 }
 

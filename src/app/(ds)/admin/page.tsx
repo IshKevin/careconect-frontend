@@ -1,270 +1,155 @@
-/* eslint-disable react-hooks/rules-of-hooks */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useAuthHooks } from '@/hooks/useAuth';
-import { useAdminMetrics } from '@/hooks/useAdmin';
+import Link from 'next/link';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Button } from '@/components/ui/Button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Empty, Loading, Notice, Section, StatCard, StatusBadge, errorText, formatDate, formatRwf } from '@/components/dashboard/common';
+import { useAdminDashboard } from '@/hooks/useDashboards';
 
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Users, CalendarCheck, FileText, RefreshCcw, Download } from "lucide-react";
+const sum = (values: Record<string, number>) => Object.values(values).reduce((a, b) => a + b, 0);
 
-import {
-  ResponsiveContainer,
-  PieChart, Pie, Cell, Tooltip,
-} from 'recharts';
+const ChartCard = ({ title, data }: { title: string; data: { label: string; value: number }[] }) => (
+  <Section title={title}>
+    {data.length === 0 ? (
+      <Empty>No data in this period.</Empty>
+    ) : (
+      <div className="h-56 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="label" fontSize={11} tickLine={false} />
+            <YAxis fontSize={11} allowDecimals={false} width={36} tickLine={false} />
+            <Tooltip />
+            <Bar dataKey="value" fill="#2dd4bf" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    )}
+  </Section>
+);
 
-export default function AdminDashboard() {
-  const { user } = useAuthHooks();
-  const { data: metrics, isLoading: loading, error, refetch } = useAdminMetrics();
-  const [notice, setNotice] = useState<string | null>(null);
+export default function AdminDashboardPage() {
+  const { data, isLoading, error, refetch } = useAdminDashboard();
 
-  const refresh = async () => {
-    try {
-      await refetch();
-      setNotice('Dashboard refreshed.');
-      setTimeout(() => setNotice(null), 1800);
-    } catch (e) {
-      console.log(e);
-    }
-  };
-
-  const exportCSV = () => {
-    if (!metrics) return;
-    const rows = [
-      ['Section', 'Key', 'Value'],
-      ['Users', 'total', metrics.users.total],
-      ['Users', 'patients', metrics.users.patients],
-      ['Users', 'doctors', metrics.users.doctors],
-      ['Users', 'active', metrics.users.active],
-      ['Users', 'pendingVerification', metrics.users.pendingVerification],
-      ['Users', 'inactive', String(metrics.users.inactive)],
-      ['Appointments', 'total', metrics.appointments.total],
-      ['Appointments', 'completed', metrics.appointments.completed],
-      ['Appointments', 'scheduled', metrics.appointments.scheduled],
-      ['Invoices', 'total', metrics.invoices.total],
-      ['Invoices', 'paid', metrics.invoices.paid],
-      ['Invoices', 'pending', metrics.invoices.pending],
-      ['Meta', 'generatedAt', metrics.generatedAt],
-    ];
-    const csv = rows.map(r => r.map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `admin-metrics-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  if (!user) {
-    return <p className="mt-10 text-center text-gray-500">Please log in to view the dashboard.</p>;
+  if (isLoading) return <Loading />;
+  if (error || !data) {
+    return (
+      <Notice tone="error">
+        {errorText(error, 'Metrics could not be loaded.')}{' '}
+        <Button variant="link" className="px-1" onClick={() => refetch()}>Try again</Button>
+      </Notice>
+    );
   }
 
-  // brand + chart palette
-  const BRAND = '#C4E1E1';
-  const COLORS = ['#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#6366F1'];
+  const invoiceTotal = sum(Object.fromEntries(Object.entries(data.invoices.byStatus).map(([k, v]) => [k, v.count])));
+  const appointmentsToday = data.appointments.daily.find((d) => d.date === new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kigali' }))?.count ?? 0;
 
-  const userChartData = useMemo(() => (
-    metrics ? [
-      { name: 'Patients', value: Number(metrics.users.patients) },
-      { name: 'Doctors', value: Number(metrics.users.doctors) },
-      { name: 'Active', value: Number(metrics.users.active) },
-      { name: 'Pending', value: Number(metrics.users.pendingVerification) },
-      { name: 'Inactive', value: Number(metrics.users.inactive) },
-    ] : []
-  ), [metrics]);
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Operations dashboard</h1>
+          <p className="text-sm text-gray-600">Live counts from the platform. Rwanda time.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/refunds"><Button variant="outline">Refund queue</Button></Link>
+          <Link href="/admin/facilities"><Button variant="outline">Facilities</Button></Link>
+          <Link href="/admin/reconciliation"><Button variant="outline">Reconciliation</Button></Link>
+        </div>
+      </div>
 
-  if (loading) {
-    return (
-      <div className="p-6">
-        <div className="mx-auto max-w-6xl">
-          <div className="mb-6 h-1 w-full rounded-full" style={{ background: 'linear-gradient(90deg, transparent 0%, #C4E1E1 22%, #C4E1E1 78%, transparent 100%)' }} />
-          <div className="mb-4 h-8 w-48 animate-pulse rounded bg-gray-200/70" />
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="rounded-2xl border border-black/5 bg-white/70 p-5 shadow-xl backdrop-blur">
-                <div className="mb-3 h-5 w-28 animate-pulse rounded bg-gray-200/60" />
-                <div className="h-8 w-24 animate-pulse rounded bg-gray-200/60" />
-              </div>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Users" value={data.users.total} hint={`${data.users.newLast30Days} new in 30 days`} />
+        <StatCard label="Unverified emails" value={data.users.unverifiedEmails} hint={`${data.users.suspended} suspended accounts`} />
+        <StatCard label="Appointments today" value={appointmentsToday} />
+        <StatCard label="Invoices" value={invoiceTotal} hint={`${data.invoices.byStatus.pending?.count ?? 0} unpaid`} />
+        <StatCard label="Refunds awaiting decision" value={data.refunds.pendingApprovals} />
+        <StatCard label="Active sponsor links" value={data.sponsorship.byStatus.active ?? 0} hint={`${data.sponsorship.activeWithMedicalAccess} with medical access`} />
+        <StatCard label="Facilities to review" value={data.facilities.byStatus.pending ?? 0} />
+        <StatCard
+          label="Reconciliation mismatches"
+          value={data.reconciliation?.mismatchCount ?? '—'}
+          hint={data.reconciliation ? `Last run ${formatDate(data.reconciliation.lastRunAt)}` : 'No run yet'}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ChartCard title="Appointments, last 14 days" data={data.appointments.daily.map((d) => ({ label: d.date.slice(5), value: d.count }))} />
+        <ChartCard title="Paid revenue, last 30 days (RWF)" data={data.invoices.revenueDaily.map((d) => ({ label: d.date.slice(5), value: Number(d.amount) }))} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Section title="Users by type">
+          <Table>
+            <TableBody>
+              {Object.entries(data.users.byType).map(([type, n]) => (
+                <TableRow key={type}>
+                  <TableCell className="capitalize">{type.replace(/_/g, ' ')}</TableCell>
+                  <TableCell className="text-right font-medium">{n}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Section>
+
+        <Section title="Money">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Area</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Count</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Object.entries(data.invoices.byStatus).map(([status, v]) => (
+                <TableRow key={`inv-${status}`}>
+                  <TableCell>Invoices</TableCell>
+                  <TableCell><StatusBadge value={status} /></TableCell>
+                  <TableCell className="text-right">{v.count}</TableCell>
+                  <TableCell className="text-right">{formatRwf(v.amount)}</TableCell>
+                </TableRow>
+              ))}
+              {Object.entries(data.payments.byStatus).map(([status, v]) => (
+                <TableRow key={`pay-${status}`}>
+                  <TableCell>Payments</TableCell>
+                  <TableCell><StatusBadge value={status} /></TableCell>
+                  <TableCell className="text-right">{v.count}</TableCell>
+                  <TableCell className="text-right">{formatRwf(v.amount)}</TableCell>
+                </TableRow>
+              ))}
+              {Object.entries(data.refunds.byStatus).map(([status, v]) => (
+                <TableRow key={`ref-${status}`}>
+                  <TableCell>Refunds</TableCell>
+                  <TableCell><StatusBadge value={status} /></TableCell>
+                  <TableCell className="text-right">{v.count}</TableCell>
+                  <TableCell className="text-right">{formatRwf(v.amount)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Section>
+      </div>
+
+      <Section
+        title="Facilities waiting for verification"
+        action={<Link href="/admin/facilities"><Button variant="link" className="px-0">Open facilities</Button></Link>}
+      >
+        {data.facilities.toReview.length === 0 ? (
+          <Empty>Nothing waiting for review.</Empty>
+        ) : (
+          <ul className="divide-y text-sm">
+            {data.facilities.toReview.map((f) => (
+              <li key={f.facilityId} className="flex items-center justify-between py-2">
+                <span className="font-medium">{f.name}</span>
+                <span className="capitalize text-gray-500">{f.facilityType.replace(/_/g, ' ')} · {formatDate(f.createdAt)}</span>
+              </li>
             ))}
-          </div>
-          <div className="mt-6 h-80 animate-pulse rounded-2xl border border-black/5 bg-white/70 shadow-xl backdrop-blur" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="mx-auto mt-12 max-w-3xl rounded-xl border border-rose-200 bg-rose-50 p-6 text-rose-700" role="alert">
-        <p className="text-sm font-medium">Error</p>
-        <p className="mt-1 text-sm">{(error as any)?.message || 'Failed to fetch metrics'}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="p-6"
-      style={{ ['--brand' as any]: BRAND } as React.CSSProperties}
-    >
-      {/* brand ribbon */}
-      <div
-        className="mx-auto mb-6 h-1 max-w-6xl rounded-full"
-        style={{ background: 'linear-gradient(90deg, transparent 0%, var(--brand) 20%, var(--brand) 80%, transparent 100%)' }}
-        aria-hidden
-      />
-
-      <div className="mx-auto max-w-6xl space-y-6">
-        {/* Header + actions */}
-        <header className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Admin Dashboard</h1>
-            <p className="mt-1 text-gray-600">
-              Welcome back, <span className="font-medium">{user.profile?.firstName} {user.profile?.lastName}</span>.
-            </p>
-            {metrics && (
-              <p className="mt-1 text-xs text-gray-500">Last generated: {new Date(metrics.generatedAt).toLocaleString()}</p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={refresh} disabled={loading} className="rounded-xl bg-[var(--brand)]/80 text-gray-900 hover:bg-[var(--brand)] disabled:opacity-60">
-              <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
-            </Button>
-            <Button variant="outline" onClick={exportCSV} className="rounded-xl border-black/10">
-              <Download className="mr-2 h-4 w-4" /> Export CSV
-            </Button>
-          </div>
-        </header>
-
-        {notice && (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700" role="status">
-            {notice}
-          </div>
+          </ul>
         )}
-
-        {metrics && (
-          <>
-            {/* KPI cards */}
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              <StatCard
-                icon={<Users className="h-5 w-5 text-black/70" />}
-                title="Users"
-                value={metrics.users.total}
-                brand
-              />
-              <StatCard
-                icon={<CalendarCheck className="h-5 w-5 text-black/70" />}
-                title="Appointments"
-                value={metrics.appointments.total}
-              />
-              <StatCard
-                icon={<FileText className="h-5 w-5 text-black/70" />}
-                title="Invoices"
-                value={metrics.invoices.total}
-              />
-            </div>
-
-            {/* Donut chart + quick stats */}
-            <div className="rounded-2xl border border-black/5 bg-white/80 p-6 shadow-xl backdrop-blur">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold tracking-tight text-gray-900">User Distribution</h2>
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full" style={{ background: 'var(--brand)' }} />
-                  <span className="text-xs text-gray-500">Snapshot</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                <div className="lg:col-span-2">
-                  <ResponsiveContainer width="100%" height={320}>
-                    <PieChart>
-                      <Pie
-                        data={userChartData}
-                        innerRadius={60}
-                        outerRadius={110}
-                        paddingAngle={2}
-                        dataKey="value"
-                      >
-                        {userChartData.map((_, i) => (
-                          <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: 12,
-                          border: '1px solid rgba(0,0,0,0.06)',
-                          boxShadow: '0 4px 24px rgba(0,0,0,0.08)',
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <Mini stat="Patients" value={metrics.users.patients} />
-                  <Mini stat="Doctors" value={metrics.users.doctors} />
-                  <Mini stat="Active" value={metrics.users.active} />
-                  <Mini stat="Pending" value={metrics.users.pendingVerification} />
-                </div>
-              </div>
-            </div>
-
-            {/* Secondary row */}
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <Card className="rounded-2xl border border-black/5 bg-white/80 shadow-xl backdrop-blur">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-800">Appointments Breakdown</CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-3">
-                  <Mini stat="Completed" value={metrics.appointments.completed} />
-                  <Mini stat="Scheduled" value={metrics.appointments.scheduled} />
-                </CardContent>
-              </Card>
-
-              <Card className="rounded-2xl border border-black/5 bg-white/80 shadow-xl backdrop-blur">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-gray-800">Invoice Status</CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-3">
-                  <Mini stat="Paid" value={metrics.invoices.paid} />
-                  <Mini stat="Pending" value={metrics.invoices.pending} />
-                </CardContent>
-              </Card>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ icon, title, value, brand = false }: { icon: React.ReactNode; title: string; value: string | number; brand?: boolean }) {
-  return (
-    <Card className="rounded-2xl border border-black/5 bg-white/80 shadow-xl backdrop-blur">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <div className="flex items-center gap-3">
-          <div
-            className="grid h-10 w-10 place-items-center rounded-lg ring-1 ring-black/5"
-            style={{ background: brand ? 'var(--brand)' : 'rgba(0,0,0,0.04)' }}
-          >
-            {icon}
-          </div>
-          <CardTitle className="text-sm font-medium text-gray-800">{title}</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-3xl font-semibold tracking-tight">{value}</p>
-        <p className="mt-1 text-xs text-gray-500">Total</p>
-      </CardContent>
-    </Card>
-  );
-}
-
-function Mini({ stat, value }: { stat: string; value: string | number }) {
-  return (
-    <div className="rounded-xl border border-black/5 bg-white/70 p-3">
-      <p className="text-xs text-gray-500">{stat}</p>
-      <p className="mt-1 text-lg font-semibold">{value}</p>
+      </Section>
     </div>
   );
 }

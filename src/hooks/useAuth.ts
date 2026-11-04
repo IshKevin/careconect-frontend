@@ -51,6 +51,9 @@ export function useAuthHooks() {
             }
             router.push('/doctor');
             break;
+          case 'sponsor':
+            router.push('/sponsor');
+            break;
           default:
             setError('Invalid user type');
         }
