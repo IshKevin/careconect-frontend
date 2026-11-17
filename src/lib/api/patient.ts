@@ -46,6 +46,11 @@ export const addAllergy = async (data: CreateAllergyRequest) => {
     return (await api.post<Allergy>('/patient/allergies', data)).data;
 };
 
+// Edits send only the fields that change; '' clears an optional field.
+export const updateAllergy = async (allergyId: string, data: Partial<CreateAllergyRequest>) => {
+    return (await api.put<{ success: boolean; data: Allergy }>(`/patient/allergies/${allergyId}`, data)).data.data;
+};
+
 export const deleteAllergy = async (allergyId: string) => {
     return (await api.delete<{ message: string }>(`/patient/allergies/${allergyId}`)).data;
 };
@@ -58,7 +63,7 @@ export const addMedication = async (data: CreateMedicationRequest) => {
     return (await api.post<Medication>('/patient/medications', data)).data;
 };
 
-export const updateMedication = async (medicationId: string, data: CreateMedicationRequest) => {
+export const updateMedication = async (medicationId: string, data: Partial<CreateMedicationRequest>) => {
     return (await api.put<Medication>(`/patient/medications/${medicationId}`, data)).data;
 };
 

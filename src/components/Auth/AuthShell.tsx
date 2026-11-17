@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { CalendarCheck, ShieldCheck, Video } from 'lucide-react';
 import { Logo } from '@/components/layout/Logo';
+import MaintenanceBanner from '@/components/layout/MaintenanceBanner';
 
 const POINTS = [
   { icon: CalendarCheck, title: 'Book in minutes', text: 'Real availability from doctors near you.' },
@@ -43,7 +44,9 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
         <p className="relative mt-12 text-xs text-brand-50/60">In an emergency, call 912 or go to the nearest hospital.</p>
       </aside>
 
-      <main className="flex flex-col px-4 py-8 sm:px-8">
+      <main className="flex flex-col">
+        <MaintenanceBanner />
+        <div className="flex flex-1 flex-col px-4 py-8 sm:px-8">
         <div className="lg:hidden">
           <Logo />
         </div>
@@ -60,6 +63,7 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
           <span className="mx-2">·</span>
           <a href="mailto:support@isanomed.org" className="hover:text-slate-600">support@isanomed.org</a>
         </p>
+        </div>
       </main>
     </div>
   );

@@ -32,52 +32,60 @@ export interface CreateMedicalHistoryRequest {
     notes?: string;
 }
 
+export type AllergenType = 'drug' | 'food' | 'environmental' | 'other';
+export type Severity = 'mild' | 'moderate' | 'severe' | 'critical';
+
 export interface Allergy {
     allergyId: string;
-    allergenType: string;
+    allergenType: AllergenType;
     allergenName: string;
-    reactionSeverity: 'mild' | 'moderate' | 'severe';
-    symptoms: string;
+    reactionSeverity: Severity | null;
+    symptoms: string | null;
+    firstOccurrence?: string | null;
+    lastOccurrence?: string | null;
+    treatmentNotes?: string | null;
+    verifiedByDoctor?: boolean;
+    createdAt?: string;
+}
+
+export interface CreateAllergyRequest {
+    allergenType: AllergenType;
+    allergenName: string;
+    reactionSeverity?: Severity;
+    symptoms?: string;
     firstOccurrence?: string;
     lastOccurrence?: string;
     treatmentNotes?: string;
 }
 
-export interface CreateAllergyRequest {
-    allergenType: string;
-    allergenName: string;
-    reactionSeverity: 'mild' | 'moderate' | 'severe';
-    symptoms: string;
-    firstOccurrence?: string;
-    lastOccurrence?: string;
-    treatmentNotes?: string;
-}
+export type MedicationRoute = 'oral' | 'injection' | 'topical' | 'inhalation' | 'other';
 
 export interface Medication {
     medicationId: string;
     medicationName: string;
-    genericName?: string;
-    dosage: string;
-    frequency: string;
-    route: string;
-    startDate: string;
-    endDate?: string;
-    pharmacyFilled?: string;
-    sideEffects?: string;
+    genericName?: string | null;
+    dosage?: string | null;
+    frequency?: string | null;
+    route?: MedicationRoute | null;
+    startDate?: string | null;
+    endDate?: string | null;
+    pharmacyFilled?: string | null;
+    sideEffects?: string | null;
     isActive: boolean;
+    createdAt?: string;
 }
 
 export interface CreateMedicationRequest {
     medicationName: string;
     genericName?: string;
-    dosage: string;
-    frequency: string;
-    route: string;
-    startDate: string;
+    dosage?: string;
+    frequency?: string;
+    route?: MedicationRoute;
+    startDate?: string;
     endDate?: string;
     pharmacyFilled?: string;
     sideEffects?: string;
-    isActive: boolean;
+    isActive?: boolean;
 }
 
 export interface PatientPreferences {

@@ -7,6 +7,7 @@ import { X } from 'lucide-react';
 import { useAuthHooks } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { Logo } from './Logo';
+import { useAppConfig } from '@/hooks/useAppConfig';
 import { NAV, activeItem } from './nav';
 
 const ROLE_LABEL: Record<string, string> = {
@@ -63,14 +64,15 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function SidebarFooter() {
+  const { supportEmail } = useAppConfig();
   return (
     <div className="border-t border-sidebar-border p-4">
       <div className="rounded-xl bg-gradient-to-br from-brand-50 to-white p-3 ring-1 ring-brand-100">
         <p className="text-xs font-semibold text-brand-800">Need help?</p>
         <p className="mt-0.5 text-xs text-slate-500">
           Write to{' '}
-          <a href="mailto:support@isanomed.org" className="font-medium text-brand-700 hover:underline">
-            support@isanomed.org
+          <a href={`mailto:${supportEmail}`} className="font-medium text-brand-700 hover:underline">
+            {supportEmail}
           </a>
         </p>
       </div>

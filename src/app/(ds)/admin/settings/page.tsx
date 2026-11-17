@@ -1,144 +1,87 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
-import { useAuthHooks } from '@/hooks/useAuth';
-import api from '@/lib/api/api';
 
+import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { RefreshCcw, Save, Wrench } from 'lucide-react';
+import api from '@/lib/api/api';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-
-import { RefreshCcw, Save, Wrench } from 'lucide-react';
 import { Loading, Notice, PageHeader, Section, errorText } from '@/components/dashboard/common';
 
+// Stored on the server (GET/PATCH /admin/settings, table system_settings). Each setting has a real effect;
+// see careconect-bn/src/services/settings.service.ts.
 type Settings = {
-  appName: string;
   supportEmail: string;
-  timezone: string;
-  sessionTimeoutMins: number;
-
-  systemMaintenance: boolean;
-  maintenanceMessage: string;
-
   allowSelfSignup: boolean;
   emailNotifications: boolean;
-  smsNotifications: boolean;
-
-  version?: string;
-  updatedAt?: string;
+  maintenanceMode: boolean;
+  maintenanceMessage: string;
+  updatedAt?: string | null;
 };
 
-// Starting values for fields the server does not return. They describe this product, not demo data.
-const defaultSettings: Settings = {
-  appName: 'IsanoMed',
-  supportEmail: 'support@isanomed.org',
-  timezone: 'Africa/Kigali',
-  sessionTimeoutMins: 30,
-
-  systemMaintenance: false,
-  maintenanceMessage: 'We are currently undergoing maintenance. Please try again later.',
-
-  allowSelfSignup: true,
-  emailNotifications: true,
-  smsNotifications: false,
-};
+const EDITABLE: (keyof Settings)[] = ['supportEmail', 'allowSelfSignup', 'emailNotifications', 'maintenanceMode', 'maintenanceMessage'];
 
 export default function SettingsPage() {
-  const { user } = useAuthHooks();
-
-  const [settings, setSettings] = useState<Settings | null>(null);
+  const [saved, setSaved] = useState<Settings | null>(null);
   const [form, setForm] = useState<Settings | null>(null);
-
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchSettings = async () => {
-      setLoading(true);
-      setError(null);
-      setNotice(null);
-      try {
-        const res = await api.get('/misc/configuration');
-        const data = (res?.data?.data || res?.data) as Partial<Settings> | undefined;
-
-        // Merge into fallback to ensure all fields exist
-        const merged = { ...defaultSettings, ...(data ?? {}) };
-        setSettings(merged);
-        setForm(merged);
-      } catch (err: unknown) {
-        setSettings(defaultSettings);
-        setForm(defaultSettings);
-        let msg = 'Failed to fetch settings';
-        if (typeof err === 'string') msg = err;
-        else if (err && typeof err === 'object' && 'response' in err) {
-          const axiosErr = err as { response: { data?: { message?: string } } };
-          if (axiosErr.response.data?.message) msg = axiosErr.response.data.message;
-        } else if (err instanceof Error) msg = err.message;
-        setError(msg);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchSettings();
-  }, []);
-
-  const dirty = useMemo(() => {
-    if (!settings || !form) return false;
-    return JSON.stringify(settings) !== JSON.stringify(form);
-  }, [settings, form]);
-
-  const onChange = <K extends keyof Settings>(key: K, value: Settings[K]) => {
-    if (!form) return;
-    setForm({ ...form, [key]: value });
-  };
-
-  const onSave = async () => {
-    if (!form) return;
-    setSaving(true);
-    setError(null);
-    setNotice(null);
+  const load = async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
-      // Try real API
-      const res = await api.patch('/admin/settings', form);
-      // The API answers { updated, settings, updatedAt }, possibly inside `data`.
-      const body = (res?.data?.data ?? res?.data) as { settings?: Partial<Settings>; updatedAt?: string } & Partial<Settings> | undefined;
-      const saved = body?.settings ?? body;
-      const updated = {
-        ...form,
-        ...(saved && typeof saved === 'object' ? saved : {}),
-        ...(body?.updatedAt ? { updatedAt: body.updatedAt } : {}),
-      } as Settings;
-      setSettings(updated);
-      setForm(updated);
-      setNotice('Settings saved successfully.');
-    } catch (err: unknown) {
-      setError(errorText(err, 'Settings could not be saved.'));
+      const res = await api.get<{ success: boolean; data: Settings }>('/admin/settings');
+      setSaved(res.data.data);
+      setForm(res.data.data);
+    } catch (err) {
+      setLoadError(errorText(err, 'Settings could not be loaded.'));
     } finally {
-      setSaving(false);
-      setTimeout(() => setNotice(null), 2500);
+      setLoading(false);
     }
   };
 
-  const onReset = () => {
-    if (!settings) return;
-    setForm(settings);
-  };
+  useEffect(() => {
+    load();
+  }, []);
 
-  if (!user) return null;
+  // Only the fields that changed are sent.
+  const changes = useMemo(() => {
+    if (!saved || !form) return {};
+    return Object.fromEntries(EDITABLE.filter((k) => form[k] !== saved[k]).map((k) => [k, form[k]]));
+  }, [saved, form]);
+  const dirty = Object.keys(changes).length > 0;
+
+  const set = <K extends keyof Settings>(key: K, value: Settings[K]) => setForm((f) => (f ? { ...f, [key]: value } : f));
+
+  const onSave = async () => {
+    if (!dirty) return;
+    if (changes.maintenanceMode === true && !window.confirm('Turn on maintenance mode? Patients, doctors and sponsors will not be able to make changes until you turn it off.')) {
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await api.patch<{ success: boolean; data: Settings }>('/admin/settings', changes);
+      setSaved(res.data.data);
+      setForm(res.data.data);
+      toast.success('Settings saved');
+    } catch (err) {
+      toast.error(errorText(err, 'Settings could not be saved.'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const actions = (
     <>
-      <Button type="button" variant="outline" onClick={onReset} disabled={!dirty || !form}>
-        <RefreshCcw className="size-4" />
-        Reset
+      <Button type="button" variant="outline" onClick={() => setForm(saved)} disabled={!dirty || saving}>
+        <RefreshCcw /> Discard
       </Button>
-      <Button type="button" onClick={onSave} disabled={!dirty || saving || !form}>
-        <Save className="size-4" />
-        {saving ? 'Saving…' : 'Save changes'}
+      <Button type="button" onClick={onSave} disabled={!dirty || saving}>
+        <Save /> {saving ? 'Saving…' : 'Save changes'}
       </Button>
     </>
   );
@@ -147,136 +90,87 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Settings"
-        description="System-wide options for access, notifications and maintenance."
-        actions={actions}
+        description={
+          saved?.updatedAt ? `System-wide options. Last changed ${new Date(saved.updatedAt).toLocaleString('en-GB')}.` : 'System-wide options for access, notifications and maintenance.'
+        }
+        actions={form ? actions : undefined}
       />
 
-      <Notice tone="info">
-        The server accepts these settings but does not store them yet, so saved values return to their defaults after a reload.
-      </Notice>
-      {notice && <Notice tone="success">{notice}</Notice>}
-      {error && <Notice tone="error">{error}</Notice>}
+      {loadError ? (
+        <Notice tone="error">
+          {loadError}{' '}
+          <button className="font-medium underline" onClick={load}>Try again</button>
+        </Notice>
+      ) : null}
 
-      {loading || !form ? (
+      {form?.maintenanceMode && saved?.maintenanceMode ? (
+        <Notice tone="warning">Maintenance mode is on. Only admins can make changes right now.</Notice>
+      ) : null}
+
+      {loading ? (
         <Section title="General"><Loading rows={4} /></Section>
-      ) : (
+      ) : form ? (
         <>
-          <Section title="General" description="How the platform introduces itself.">
-            <div className="divide-y divide-border">
-              <SettingRow id="appName" label="Application name" description="Shown in emails and page titles.">
-                <Input id="appName" value={form.appName ?? ''} onChange={(e) => onChange('appName', e.target.value)} />
-              </SettingRow>
-              <SettingRow id="supportEmail" label="Support email" description="Where users can reach the team.">
-                <Input id="supportEmail" type="email" value={form.supportEmail ?? ''} onChange={(e) => onChange('supportEmail', e.target.value)} />
-              </SettingRow>
-              <SettingRow id="timezone" label="Timezone" description="Used for schedules and reports.">
-                <Select value={form.timezone} onValueChange={(v) => onChange('timezone', v)}>
-                  <SelectTrigger id="timezone" className="w-full">
-                    <SelectValue placeholder="Select timezone" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Africa/Kigali">Africa/Kigali</SelectItem>
-                    <SelectItem value="Africa/Nairobi">Africa/Nairobi</SelectItem>
-                    <SelectItem value="UTC">UTC</SelectItem>
-                  </SelectContent>
-                </Select>
-              </SettingRow>
-              <SettingRow id="sessionTimeoutMins" label="Session timeout" description="Minutes of inactivity before sign-out.">
-                <Input
-                  id="sessionTimeoutMins"
-                  type="number"
-                  min={5}
-                  value={form.sessionTimeoutMins ?? ''}
-                  onChange={(e) => onChange('sessionTimeoutMins', Number(e.target.value))}
-                />
-              </SettingRow>
-            </div>
+          <Section title="General" description="How people reach the IsanoMed team.">
+            <SettingRow id="supportEmail" label="Support email" description="Shown in the app and in error messages.">
+              <Input id="supportEmail" type="email" value={form.supportEmail} onChange={(e) => set('supportEmail', e.target.value)} />
+            </SettingRow>
           </Section>
 
           <Section title="Access" description="Who can create an account.">
-            <div className="divide-y divide-border">
-              <SettingRow id="allowSelfSignup" label="Allow self sign-up" description="Enable users to create their own accounts." inline>
-                <Switch id="allowSelfSignup" checked={!!form.allowSelfSignup} onCheckedChange={(v) => onChange('allowSelfSignup', v)} />
-              </SettingRow>
-            </div>
+            <SettingRow id="allowSelfSignup" label="Allow self sign-up" description="When off, the registration page is closed. Admins can still create accounts." inline>
+              <Switch id="allowSelfSignup" checked={form.allowSelfSignup} onCheckedChange={(v) => set('allowSelfSignup', v)} />
+            </SettingRow>
           </Section>
 
-          <Section title="Notifications" description="Channels used to reach users.">
-            <div className="divide-y divide-border">
-              <SettingRow id="emailNotifications" label="Email notifications" description="Send important updates to user email." inline>
-                <Switch id="emailNotifications" checked={!!form.emailNotifications} onCheckedChange={(v) => onChange('emailNotifications', v)} />
-              </SettingRow>
-              <SettingRow id="smsNotifications" label="SMS notifications" description="Send SMS alerts for time-sensitive events." inline>
-                <Switch id="smsNotifications" checked={!!form.smsNotifications} onCheckedChange={(v) => onChange('smsNotifications', v)} />
-              </SettingRow>
-            </div>
+          <Section title="Notifications" description="Emails sent to patients.">
+            <SettingRow
+              id="emailNotifications"
+              label="Appointment and payment emails"
+              description="Booking confirmations and payment receipts. Password-reset and verification emails are always sent."
+              inline
+            >
+              <Switch id="emailNotifications" checked={form.emailNotifications} onCheckedChange={(v) => set('emailNotifications', v)} />
+            </SettingRow>
           </Section>
 
           <Section
             title={<span className="flex items-center gap-2"><Wrench className="size-4 text-slate-500" /> Maintenance</span>}
-            description="Take the platform offline for end users during updates."
+            description="Pause changes during updates. People can still sign in and view their information."
           >
             <div className="divide-y divide-border">
-              <SettingRow id="systemMaintenance" label="Maintenance mode" description="Temporarily disable access for end users while performing updates." inline>
-                <Switch id="systemMaintenance" checked={!!form.systemMaintenance} onCheckedChange={(v) => onChange('systemMaintenance', v)} />
+              <SettingRow id="maintenanceMode" label="Maintenance mode" description="Shows the message below to everyone and blocks changes from non-admins." inline>
+                <Switch id="maintenanceMode" checked={form.maintenanceMode} onCheckedChange={(v) => set('maintenanceMode', v)} />
               </SettingRow>
-              <SettingRow id="maintenanceMessage" label="Maintenance message" description="Shown to users while maintenance mode is on.">
-                <Textarea
-                  id="maintenanceMessage"
-                  rows={3}
-                  value={form.maintenanceMessage ?? ''}
-                  onChange={(e) => onChange('maintenanceMessage', e.target.value)}
-                />
+              <SettingRow id="maintenanceMessage" label="Maintenance message" description="Up to 300 characters.">
+                <Textarea id="maintenanceMessage" rows={3} maxLength={300} value={form.maintenanceMessage} onChange={(e) => set('maintenanceMessage', e.target.value)} />
               </SettingRow>
             </div>
-            {(form.version || form.updatedAt) && (
-              <dl className="mt-4 grid gap-2 border-t border-border pt-4 text-xs text-muted-foreground sm:grid-cols-2">
-                <div>
-                  <dt className="inline font-medium text-slate-700">Version:</dt> <dd className="inline">{form.version ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt className="inline font-medium text-slate-700">Last updated:</dt>{' '}
-                  <dd className="inline">{form.updatedAt ? new Date(form.updatedAt).toLocaleString() : '—'}</dd>
-                </div>
-              </dl>
-            )}
           </Section>
 
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">{actions}</div>
         </>
-      )}
+      ) : null}
     </div>
   );
 }
 
-/* ---------- Small UI helpers ---------- */
-
 // One setting: label and description on the left, the control on the right (stacked on small screens).
 // `inline` keeps short controls such as switches beside the label on every screen size.
-const SettingRow = ({
-  id,
-  label,
-  description,
-  inline = false,
-  children,
-}: {
-  id: string;
-  label: string;
-  description?: string;
-  inline?: boolean;
-  children: React.ReactNode;
-}) => (
-  <div
-    className={
-      inline
-        ? 'flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0'
-        : 'grid gap-2 py-4 first:pt-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:gap-6'
-    }
-  >
-    <div className="min-w-0">
-      <label htmlFor={id} className="text-sm font-medium text-slate-900">{label}</label>
-      {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+function SettingRow({ id, label, description, inline = false, children }: { id: string; label: string; description?: string; inline?: boolean; children: React.ReactNode }) {
+  return (
+    <div
+      className={
+        inline
+          ? 'flex items-start justify-between gap-4 py-4 first:pt-0 last:pb-0'
+          : 'grid gap-2 py-4 first:pt-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:gap-6'
+      }
+    >
+      <div className="min-w-0">
+        <label htmlFor={id} className="text-sm font-medium text-slate-900">{label}</label>
+        {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
+      </div>
+      <div className={inline ? 'shrink-0 pt-0.5' : 'min-w-0'}>{children}</div>
     </div>
-    <div className={inline ? 'shrink-0 pt-0.5' : 'min-w-0'}>{children}</div>
-  </div>
-);
+  );
+}

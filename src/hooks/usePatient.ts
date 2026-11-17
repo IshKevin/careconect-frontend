@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { Medication } from '../types/patient';
+import type { Allergy, CreateAllergyRequest, Medication } from '../types/patient';
 import * as PatientAPI from '../lib/api/patient';
 import {
     CreateMedicationRequest
@@ -65,6 +65,19 @@ export function useAllergies() {
     return useQuery({
         queryKey: PATIENT_KEYS.allergies(),
         queryFn: PatientAPI.getAllergies,
+        // The API wraps lists in { success, data }; hand consumers the array.
+        select: (res: unknown): Allergy[] => (Array.isArray(res) ? res : ((res as { data?: Allergy[] })?.data ?? [])),
+    });
+}
+
+export function useUpdateAllergy() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, data }: { id: string; data: Partial<CreateAllergyRequest> }) => PatientAPI.updateAllergy(id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: PATIENT_KEYS.allergies() });
+            queryClient.invalidateQueries({ queryKey: PATIENT_KEYS.medicalSummary() });
+        },
     });
 }
 
@@ -113,7 +126,7 @@ export function useAddMedication() {
 export function useUpdateMedication() {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: ({ id, data }: { id: string; data: CreateMedicationRequest }) =>
+        mutationFn: ({ id, data }: { id: string; data: Partial<CreateMedicationRequest> }) =>
             PatientAPI.updateMedication(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: PATIENT_KEYS.medications() });
