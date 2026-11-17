@@ -1,133 +1,42 @@
-import Link from "next/link";
-import {
-  Phone,
-  Mail,
-  MapPin,
-  Facebook,
-  Twitter,
-  Instagram,
-  Linkedin,
-} from "lucide-react";
+import Link from 'next/link';
+import { Logo } from './Logo';
 
+// Public site footer (landing page).
 export default function Footer() {
   const year = new Date().getFullYear();
-
   return (
-    <footer className="relative text-white">
-      {/* Shiny gradient background */}
-      <div className="absolute inset-0 -z-30 bg-gradient-to-br from-teal-500 via-emerald-500 to-green-500" />
-
-      {/* Global blur for glass effect */}
-      <div className="absolute inset-0 -z-20 bg-transparent supports-[backdrop-filter]:backdrop-blur-3xl" />
-
-      {/* Fine noise texture */}
-      <div
-        aria-hidden
-        className="absolute inset-0 -z-10 opacity-[0.04]"
-        style={{ backgroundImage: "url('/assets/noise.png')", backgroundSize: "auto" }}
-      />
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        {/* Crystal-clear glass panel */}
-        <div className="relative rounded-3xl bg-white/5 backdrop-blur-3xl ring-1 ring-white/20 shadow-lg overflow-hidden">
-          {/* Inner scrim for readability */}
-          <div className="absolute inset-0 bg-black/20 pointer-events-none" />
-
-          <div className="relative p-8 md:p-10">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
-              {/* Company Info */}
-              <div className="col-span-1 md:col-span-2">
-                <div className="flex items-center mb-4">
-                  <div className="w-10 h-10 rounded-2xl bg-white text-teal-700 font-extrabold grid place-items-center mr-3 shadow-md">
-                    N
-                  </div>
-                  <span className="text-xl font-extrabold tracking-tight drop-shadow-md">
-                    IsanoMed
-                  </span>
-                </div>
-                <p className="text-white/95 mb-5 max-w-md leading-relaxed">
-                  Connecting patients with healthcare professionals for better
-                  health outcomes. Your trusted partner in healthcare management
-                  and accessibility.
-                </p>
-                <div className="space-y-3 text-white/90">
-                  <a
-                    href="tel:+15551234567"
-                    className="flex items-center hover:text-white transition-colors"
-                  >
-                    <Phone className="w-4 h-4 mr-2" aria-hidden="true" />
-                    +1 (555) 123-4567
-                  </a>
-                  <a
-                    href="mailto:info@nexuscare.com"
-                    className="flex items-center hover:text-white transition-colors"
-                  >
-                    <Mail className="w-4 h-4 mr-2" aria-hidden="true" />
-                    info@nexuscare.com
-                  </a>
-                  <div className="flex items-start">
-                    <MapPin className="w-4 h-4 mr-2 mt-0.5" aria-hidden="true" />
-                    <span>123 Healthcare Ave, Medical City, MC 12345</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Links */}
-              <div>
-                <h3 className="text-lg font-semibold mb-4 text-white">Quick Links</h3>
-                <ul className="space-y-2">
-                  {[
-                    { href: "/", label: "Home" },
-                    { href: "#services", label: "Services" },
-                    { href: "#about", label: "About Us" },
-                    { href: "/login", label: "Patient Portal" },
-                    { href: "/register", label: "Register" },
-                  ].map((link) => (
-                    <li key={link.label}>
-                      <Link
-                        href={link.href}
-                        className="text-white/90 hover:text-white hover:underline underline-offset-4 transition-colors"
-                      >
-                        {link.label}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Services */}
-              <div>
-                <h3 className="text-lg font-semibold mb-4 text-white">Services</h3>
-                <ul className="space-y-2 text-white/90">
-                  <li className="hover:text-white transition-colors">Online Consultations</li>
-                  <li className="hover:text-white transition-colors">Appointment Booking</li>
-                  <li className="hover:text-white transition-colors">Health Records</li>
-                  <li className="hover:text-white transition-colors">Emergency Care</li>
-                  <li className="hover:text-white transition-colors">Specialist Referrals</li>
-                </ul>
-              </div>
-            </div>
-
-            {/* Footer bottom */}
-            <div className="border-t border-white/20 mt-10 pt-6 flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-3">
-                {[Facebook, Twitter, Instagram, Linkedin].map((Icon, i) => (
-                  <a
-                    key={i}
-                    href="#"
-                    aria-label={`Social Link ${i}`}
-                    className="p-2 rounded-lg bg-white/10 hover:bg-white/20 ring-1 ring-white/20 transition-colors"
-                  >
-                    <Icon className="w-5 h-5" aria-hidden="true" />
-                  </a>
-                ))}
-              </div>
-
-              <p className="text-sm text-white/85">
-                © {year} <span className="font-semibold">IsanoMed</span>. All
-                rights reserved.
-              </p>
-            </div>
+    <footer id="contact" className="border-t border-border bg-white">
+      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:px-6 md:grid-cols-4 lg:px-8">
+        <div className="md:col-span-2">
+          <Logo />
+          <p className="mt-4 max-w-sm text-sm leading-6 text-slate-500">
+            Book trusted doctors, meet them by secure video and pay with mobile money or card. Built in Rwanda, for Rwanda.
+          </p>
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Product</h3>
+          <ul className="mt-4 space-y-2.5 text-sm text-slate-500">
+            <li><a href="#features" className="hover:text-slate-900">Features</a></li>
+            <li><a href="#how-it-works" className="hover:text-slate-900">How it works</a></li>
+            <li><Link href="/register" className="hover:text-slate-900">Create an account</Link></li>
+            <li><Link href="/login" className="hover:text-slate-900">Sign in</Link></li>
+          </ul>
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">Contact</h3>
+          <ul className="mt-4 space-y-2.5 text-sm text-slate-500">
+            <li><a href="mailto:support@isanomed.org" className="hover:text-slate-900">support@isanomed.org</a></li>
+            <li>Kigali, Rwanda</li>
+            <li className="text-xs text-slate-400">In an emergency, call 912.</li>
+          </ul>
+        </div>
+      </div>
+      <div className="border-t border-border">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-6 text-xs text-slate-400 sm:flex-row sm:px-6 lg:px-8">
+          <p>© {year} IsanoMed. All rights reserved.</p>
+          <div className="flex gap-5">
+            <Link href="/terms" className="hover:text-slate-700">Terms</Link>
+            <Link href="/privacy" className="hover:text-slate-700">Privacy</Link>
           </div>
         </div>
       </div>

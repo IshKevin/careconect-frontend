@@ -2,7 +2,7 @@ export interface User {
   userId: string;
   email: string;
   phoneNumber: string;
-  userType: 'patient' | 'admin' | 'doctor' | 'sponsor';
+  userType: 'patient' | 'admin' | 'super_admin' | 'doctor' | 'sponsor';
   accountStatus: string;
   emailVerified: boolean | null;
   phoneVerified: boolean | null;

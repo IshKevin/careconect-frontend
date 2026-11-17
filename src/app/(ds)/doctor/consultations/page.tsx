@@ -1,161 +1,207 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { safeLocalStorage } from '@/lib/storage';
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { ClipboardList, FileText, NotebookPen } from 'lucide-react';
+import api from '@/lib/api/api';
+import { useAuthHooks } from '@/hooks/useAuth';
+import { useCreateConsultation } from '@/hooks/useConsultation';
+import { Button } from '@/components/ui/Button';
+import { Textarea } from '@/components/ui/textarea';
+import { Empty, Loading, Notice, PageHeader, Section, errorText, formatDate } from '@/components/dashboard/common';
 
-// Dummy doctor profile
-const doctorProfile = {
-  firstName: 'John',
-  lastName: 'Doe',
-  specialization: 'Cardiologist',
-  email: 'john.doe@example.com',
-  phone: '+250 788 123 456',
-};
+// Consultation notes are written after an appointment is completed (one record per appointment).
+// This page used to show hard-coded patients and kept notes in browser cookies; it now uses the API.
 
-// Dummy patients
-const dummyPatients: Patient[] = [
-  { id: 1, name: 'Alice Smith', age: 29, gender: 'Female' },
-  { id: 2, name: 'James Brown', age: 45, gender: 'Male' },
-  { id: 3, name: 'Maria Johnson', age: 34, gender: 'Female' },
-];
+type PersonName = { firstName?: string | null; lastName?: string | null };
 
-interface Patient {
-  id: number;
-  name: string;
-  age: number;
-  gender: string;
+interface CompletedAppointment {
+  appointmentId: string;
+  patientId: string;
+  doctorId: string;
+  appointmentType: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  patient?: { email?: string; profile?: PersonName };
 }
 
-interface Consultation {
-  id: number;
-  patientId: number;
-  chiefComplaint: string;
-  notes: string;
-  prescription: string;
-  date: string;
+interface ConsultationRow {
+  consultationId: string;
+  appointmentId: string;
+  patientId: string;
+  notes: string | null;
+  createdAt: string;
+  appointment?: { appointmentType?: string; scheduledDate?: string; scheduledTime?: string };
+  patient?: { email?: string; profile?: PersonName };
 }
+
+const nameOf = (p?: { email?: string; profile?: PersonName }) =>
+  `${p?.profile?.firstName ?? ''} ${p?.profile?.lastName ?? ''}`.trim() || p?.email || 'Patient';
+
+const selectClass =
+  'h-10 w-full min-w-0 rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20';
 
 export default function ConsultationsPage() {
-  const [patients] = useState<Patient[]>(dummyPatients);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [consultations, setConsultations] = useState<Consultation[]>([]);
-  const [formData, setFormData] = useState({ chiefComplaint: '', notes: '', prescription: '' });
+  const { user } = useAuthHooks();
+  const qc = useQueryClient();
+  const createConsultation = useCreateConsultation();
+  const [appointmentId, setAppointmentId] = useState('');
+  const [notes, setNotes] = useState('');
 
-  // Load consultations from localStorage
-  useEffect(() => {
-    const saved = safeLocalStorage.getItem('consultations');
-    if (saved) {
-      setConsultations(JSON.parse(saved));
+  const consultationsQuery = useQuery({
+    queryKey: ['doctor', 'consultations'],
+    queryFn: async () => {
+      const res = await api.get('/consultation/consultations', { params: { limit: 100 } });
+      const body = res.data?.data ?? res.data;
+      return (Array.isArray(body) ? body : body?.consultations ?? []) as ConsultationRow[];
+    },
+    enabled: user?.userType === 'doctor',
+  });
+
+  const appointmentsQuery = useQuery({
+    queryKey: ['doctor', 'appointments', 'completed'],
+    queryFn: async () => {
+      const res = await api.get('/appointments/doctor-appointments', { params: { appointmentStatus: 'completed', limit: 100 } });
+      return (res.data?.data ?? []) as CompletedAppointment[];
+    },
+    enabled: user?.userType === 'doctor',
+  });
+
+  const consultations = useMemo(
+    () => [...(consultationsQuery.data ?? [])].sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? '')),
+    [consultationsQuery.data],
+  );
+
+  // Completed appointments that do not have notes yet.
+  const awaitingNotes = useMemo(() => {
+    const done = new Set(consultations.map((c) => c.appointmentId));
+    return (appointmentsQuery.data ?? []).filter((a) => !done.has(a.appointmentId));
+  }, [appointmentsQuery.data, consultations]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const appt = awaitingNotes.find((a) => a.appointmentId === appointmentId);
+    if (!appt || !notes.trim()) return;
+    try {
+      await createConsultation.mutateAsync({
+        appointmentId: appt.appointmentId,
+        patientId: appt.patientId,
+        doctorId: appt.doctorId,
+        notes: notes.trim(),
+      });
+      toast.success(`Consultation notes saved for ${nameOf(appt.patient)}`);
+      setAppointmentId('');
+      setNotes('');
+      qc.invalidateQueries({ queryKey: ['doctor', 'consultations'] });
+    } catch (err) {
+      toast.error(errorText(err, 'The consultation could not be saved.'));
     }
-  }, []);
-
-  // Save consultations to localStorage
-  useEffect(() => {
-    safeLocalStorage.setItem('consultations', JSON.stringify(consultations));
-  }, [consultations]);
-
-  const handleAddConsultation = () => {
-    if (!selectedPatient || !formData.chiefComplaint.trim()) return;
-
-    const newConsultation = {
-      id: Date.now(),
-      patientId: selectedPatient.id,
-      ...formData,
-      date: new Date().toLocaleString(),
-    };
-
-    setConsultations([newConsultation, ...consultations]);
-    setFormData({ chiefComplaint: '', notes: '', prescription: '' });
   };
 
-  const patientConsultations = consultations.filter(c => c.patientId === selectedPatient?.id);
+  if (!user || user.userType !== 'doctor') return null;
+
+  const loading = consultationsQuery.isLoading || appointmentsQuery.isLoading;
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] p-6">
-      {/* Doctor Profile Header */}
-      <div className="bg-[#C4E1E1] p-6 rounded-xl shadow-lg mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{doctorProfile.firstName} {doctorProfile.lastName}</h1>
-          <p className="text-gray-700">{doctorProfile.specialization}</p>
-          <p className="text-sm text-gray-600">{doctorProfile.email} | {doctorProfile.phone}</p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Consultations"
+        description="Write clinical notes for completed appointments and review your past consultations."
+        actions={
+          <Button variant="outline" asChild>
+            <Link href="/doctor/appointments">Appointments</Link>
+          </Button>
+        }
+      />
 
-      {/* Main Content */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Patients List */}
-        <div className="bg-white rounded-xl shadow p-4">
-          <h2 className="text-lg font-bold mb-4">Patients</h2>
-          <ul>
-            {patients.map(patient => (
-              <li
-                key={patient.id}
-                onClick={() => setSelectedPatient(patient)}
-                className={`p-3 rounded-lg cursor-pointer mb-2 hover:bg-[#C4E1E1] ${selectedPatient?.id === patient.id ? 'bg-[#C4E1E1]' : 'bg-gray-50'}`}
-              >
-                <p className="font-medium">{patient.name}</p>
-                <p className="text-sm text-gray-600">Age: {patient.age} | {patient.gender}</p>
-              </li>
-            ))}
-          </ul>
-        </div>
+      {consultationsQuery.error || appointmentsQuery.error ? (
+        <Notice tone="error">{errorText(consultationsQuery.error ?? appointmentsQuery.error, 'Consultations could not be loaded.')}</Notice>
+      ) : null}
 
-        {/* Consultation Form & History */}
-        <div className="md:col-span-2 bg-white rounded-xl shadow p-4">
-          {selectedPatient ? (
-            <>
-              <h2 className="text-lg font-bold mb-2">Consultation for {selectedPatient.name}</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <input
-                  type="text"
-                  placeholder="Chief Complaint"
-                  value={formData.chiefComplaint}
-                  onChange={(e) => setFormData({ ...formData, chiefComplaint: e.target.value })}
-                  className="p-2 border rounded-lg"
-                />
-                <input
-                  type="text"
-                  placeholder="Notes"
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="p-2 border rounded-lg"
-                />
-                <input
-                  type="text"
-                  placeholder="Prescription"
-                  value={formData.prescription}
-                  onChange={(e) => setFormData({ ...formData, prescription: e.target.value })}
-                  className="p-2 border rounded-lg"
+      <div className="grid gap-6 lg:grid-cols-5">
+        <Section
+          className="lg:col-span-2 lg:self-start"
+          title="New consultation notes"
+          description="Notes can be added once an appointment is marked completed."
+        >
+          {loading ? (
+            <Loading rows={3} />
+          ) : awaitingNotes.length === 0 ? (
+            <Empty icon={NotebookPen}>No completed appointments are waiting for notes.</Empty>
+          ) : (
+            <form onSubmit={submit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label htmlFor="appointment" className="text-sm font-medium text-slate-700">Appointment</label>
+                <select
+                  id="appointment"
+                  required
+                  className={selectClass}
+                  value={appointmentId}
+                  onChange={(e) => setAppointmentId(e.target.value)}
+                >
+                  <option value="">Select a completed appointment</option>
+                  {awaitingNotes.map((a) => (
+                    <option key={a.appointmentId} value={a.appointmentId}>
+                      {nameOf(a.patient)} · {formatDate(a.scheduledDate)} {a.scheduledTime?.slice(0, 5)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="notes" className="text-sm font-medium text-slate-700">Clinical notes</label>
+                <Textarea
+                  id="notes"
+                  required
+                  rows={6}
+                  className="min-h-36"
+                  placeholder="Chief complaint, findings, diagnosis, prescription and follow-up…"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
                 />
               </div>
-              <button
-                onClick={handleAddConsultation}
-                className="bg-[#C4E1E1] hover:bg-[#a7cccc] text-black px-4 py-2 rounded-lg font-medium"
-              >
-                Add Consultation
-              </button>
-
-              {/* Patient's Consultation History */}
-              <h3 className="text-md font-semibold mt-6">Previous Consultations</h3>
-              {patientConsultations.length > 0 ? (
-                <ul className="mt-2 space-y-2">
-                  {patientConsultations.map(c => (
-                    <li key={c.id} className="border p-3 rounded-lg">
-                      <p className="font-medium">{c.chiefComplaint}</p>
-                      <p className="text-sm text-gray-600">{c.notes}</p>
-                      <p className="text-sm text-gray-600 italic">Prescription: {c.prescription}</p>
-                      <p className="text-xs text-gray-500">{c.date}</p>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-gray-500 mt-2">No consultations yet.</p>
-              )}
-            </>
-          ) : (
-            <p className="text-gray-500">Select a patient to start consultation</p>
+              <Button type="submit" className="w-full sm:w-auto" disabled={createConsultation.isPending || !appointmentId || !notes.trim()}>
+                {createConsultation.isPending ? 'Saving…' : 'Save consultation'}
+              </Button>
+            </form>
           )}
-        </div>
+        </Section>
+
+        <Section
+          className="lg:col-span-3"
+          title="Past consultations"
+          description={`${consultations.length} on record`}
+          flush
+        >
+          {consultationsQuery.isLoading ? (
+            <div className="px-5"><Loading rows={4} /></div>
+          ) : consultations.length === 0 ? (
+            <Empty icon={ClipboardList}>No consultations yet. Notes you save appear here.</Empty>
+          ) : (
+            <ul className="divide-y divide-border">
+              {consultations.map((c) => (
+                <li key={c.consultationId} className="flex gap-3 px-5 py-4">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600">
+                    <FileText className="size-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                      <p className="font-medium text-slate-900">{nameOf(c.patient)}</p>
+                      <p className="text-xs tabular-nums text-muted-foreground">
+                        {formatDate(c.appointment?.scheduledDate ?? c.createdAt)}
+                      </p>
+                    </div>
+                    {c.appointment?.appointmentType ? (
+                      <p className="text-xs capitalize text-muted-foreground">{c.appointment.appointmentType.replace(/_/g, ' ')}</p>
+                    ) : null}
+                    <p className="mt-1.5 whitespace-pre-line break-words text-sm text-slate-700">{c.notes || 'No notes.'}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
       </div>
     </div>
   );

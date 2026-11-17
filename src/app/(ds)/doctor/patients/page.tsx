@@ -3,6 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useAuthHooks } from '@/hooks/useAuth';
 import api from '@/lib/api/api';
+import Link from 'next/link';
+import { Search, Users } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { DataTable, Empty, Loading, Notice, PageHeader, Section, formatDate } from '@/components/dashboard/common';
 
 interface Patient {
   userId: string;
@@ -12,6 +16,8 @@ interface Patient {
     firstName: string;
     lastName: string;
   };
+  appointmentCount?: number;
+  lastVisit?: string | null;
 }
 
 export default function PatientsPage() {
@@ -42,57 +48,62 @@ export default function PatientsPage() {
 
   if (!user) return null;
 
+  const list = patients as Patient[];
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      {/* Page Header */}
-      <div
-        className="mb-8 p-6 rounded-xl shadow-md"
-        style={{ backgroundColor: '#C4E1E1' }}
-      >
-        <h1 className="text-3xl font-bold text-gray-800">Patients</h1>
-        <p className="text-gray-700 mt-2">
-          Welcome back, <span className="font-semibold">{user.profile?.firstName} {user.profile?.lastName}</span>.
-          Here’s a list of your registered patients.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Patients"
+        description="Everyone who has booked an appointment with you."
+        actions={
+          <Button variant="outline" asChild>
+            <Link href="/doctor/search"><Search /> Search patients</Link>
+          </Button>
+        }
+      />
 
-      {/* Loading State */}
-      {loading && (
-        <div className="text-center text-gray-500">
-          Loading patients...
-        </div>
-      )}
+      {error ? <Notice tone="error">{error}</Notice> : null}
 
-      {/* Error State */}
-      {error && (
-        <div className="bg-red-100 text-red-700 p-4 rounded-md mb-4">
-          {error}
-        </div>
-      )}
-
-      {/* Patients List */}
-      {!loading && !error && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {patients.length > 0 ? (
-            patients.map((patient: Patient) => (
-              <div
-                key={patient.userId}
-                className="bg-white shadow-sm rounded-lg p-5 border border-gray-200 hover:shadow-lg transition-shadow"
-              >
-                <h2 className="text-xl font-semibold text-gray-800">
-                  {patient.profile?.firstName} {patient.profile?.lastName}
-                </h2>
-                <p className="text-gray-600 mt-1">{patient.email}</p>
-                <p className="text-gray-500 text-sm mt-2">
-                  Phone: {patient.phoneNumber || 'N/A'}
-                </p>
-              </div>
-            ))
-          ) : (
-            <p className="text-gray-500">No patients found.</p>
-          )}
-        </div>
-      )}
+      <Section title="Your patients" description={loading ? undefined : `${list.length} patient${list.length === 1 ? '' : 's'}`} flush>
+        {loading ? (
+          <div className="px-5"><Loading rows={4} label="Loading patients…" /></div>
+        ) : error ? null : list.length === 0 ? (
+          <Empty icon={Users}>No patients yet. Patients appear here after they book an appointment with you.</Empty>
+        ) : (
+          <DataTable>
+            <thead>
+              <tr>
+                <th>Patient</th>
+                <th>Phone</th>
+                <th className="text-right">Visits</th>
+                <th>Last visit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((patient) => (
+                <tr key={patient.userId}>
+                  <td>
+                    <div className="flex items-center gap-3">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700">
+                        {(patient.profile?.firstName?.[0] ?? '') + (patient.profile?.lastName?.[0] ?? '') || '?'}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-900">
+                          {patient.profile?.firstName} {patient.profile?.lastName}
+                        </p>
+                        <p className="text-xs text-muted-foreground">{patient.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap">{patient.phoneNumber || 'N/A'}</td>
+                  <td className="text-right tabular-nums">{patient.appointmentCount ?? '—'}</td>
+                  <td className="whitespace-nowrap">{formatDate(patient.lastVisit)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </DataTable>
+        )}
+      </Section>
     </div>
   );
 }

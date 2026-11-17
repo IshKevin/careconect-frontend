@@ -1,275 +1,290 @@
 "use client";
 
-import React, { useMemo } from "react";
+import { useMemo } from "react";
+import Link from "next/link";
+import { format } from "date-fns";
+import {
+  CalendarCheck,
+  CalendarClock,
+  CalendarPlus,
+  ChevronRight,
+  Clock,
+  CreditCard,
+  FileHeart,
+  MapPin,
+  Pill,
+  Receipt,
+  Stethoscope,
+  Video,
+} from "lucide-react";
 import { useAuth } from "@/lib/api/auth";
 import { useMyAppointments } from "@/hooks/useAppointments";
 import { useMedications } from "@/hooks/usePatient";
 import { useInvoices } from "@/hooks/usePayments";
-import { format } from "date-fns";
+import { Button } from "@/components/ui/Button";
+import { Empty, Loading, PageHeader, Section, StatCard, StatusBadge, formatRwf } from "@/components/dashboard/common";
+import VideoCall from "@/components/consultation/VideoCall";
+import type { Appointment } from "@/types/appointment";
+
+// Appointment date and time as one Date (scheduledDate may be "YYYY-MM-DD" or a full ISO string).
+const startsAt = (a: Appointment) => new Date(`${a.scheduledDate.slice(0, 10)}T${(a.scheduledTime || "00:00").slice(0, 5)}`);
+// date-fns throws on an invalid date; show a dash instead of crashing the page.
+const fmt = (d: Date, pattern: string) => (Number.isNaN(d.getTime()) ? "—" : format(d, pattern));
+const statusOf = (a: Appointment) => a.appointmentStatus ?? a.status ?? "";
+// An appointment stays "next" for 30 minutes after its start, so the patient can still join the call.
+const GRACE_MS = 30 * 60 * 1000;
+
+const greeting = () => {
+  const h = new Date().getHours();
+  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+};
 
 export default function Page() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
-  // Fetch real data
   const { data: appointments, isLoading: isLoadingAppts } = useMyAppointments();
   const { data: medications, isLoading: isLoadingMeds } = useMedications();
-  const { data: invoices } = useInvoices(user?.userId ?? "");
+  const { data: invoices, isLoading: isLoadingInvoices } = useInvoices(user?.userId ?? "");
 
-  // Calculate stats based on real data
-  const stats = useMemo(
-    () => [
-      {
-        label: "Upcoming",
-        value: appointments?.filter(a => new Date(a.scheduledDate) > new Date()).length || 0,
-        sub: "appointments"
-      },
-      {
-        label: "Completed",
-        value: appointments?.filter(a => (a.appointmentStatus ?? a.status) === "completed").length || 0,
-        sub: "visits"
-      },
-      {
-        label: "Invoices",
-        value: invoices?.filter(i => (i.invoiceStatus ?? i.status) === "pending").length || 0,
-        sub: "due"
-      },
-    ],
-    [appointments, invoices]
+  const upcoming = useMemo(
+    () =>
+      (appointments ?? [])
+        .filter((a) => startsAt(a).getTime() > Date.now() - GRACE_MS && statusOf(a) !== "cancelled")
+        .sort((a, b) => startsAt(a).getTime() - startsAt(b).getTime()),
+    [appointments],
   );
 
-  const nextAppt = useMemo(() => {
-    if (!appointments || appointments.length === 0) return null;
+  const pendingInvoices = useMemo(
+    () => (invoices ?? []).filter((i) => (i.invoiceStatus ?? i.status) === "pending"),
+    [invoices],
+  );
+  const amountDue = pendingInvoices.reduce((sum, i) => sum + (Number(i.totalAmount) || 0), 0);
+  const completed = (appointments ?? []).filter((a) => statusOf(a) === "completed").length;
 
-    // Find next upcoming appointment
-    const upcoming = appointments
-      .filter(a => new Date(a.scheduledDate) > new Date())
-      .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime())[0];
+  const recent = useMemo(
+    () => [...(appointments ?? [])].sort((a, b) => startsAt(b).getTime() - startsAt(a).getTime()).slice(0, 5),
+    [appointments],
+  );
 
-    if (!upcoming) return null;
-
-    return {
-      date: `${format(new Date(upcoming.scheduledDate), "EEE, MMM d")} • ${upcoming.scheduledTime}`,
-      doctor: upcoming.doctor ? `Dr. ${upcoming.doctor.lastName}` : "Doctor",
-      specialty: upcoming.doctor?.specialty || "General Practice",
-      location: upcoming.appointmentType === "telemedicine" ? "Video consultation (join from Appointments)" : "In person at the clinic",
-      status: (upcoming.appointmentStatus ?? upcoming.status ?? "").replace("_", " "),
-      notes: upcoming.notes || "No additional notes.",
-    };
-  }, [appointments]);
+  const nextAppt = upcoming[0];
 
   if (!user) return null;
 
-  const BRAND = "#C4E1E1";
+  const firstName = user.profile?.firstName;
 
   return (
-    <div
-      className="min-h-[calc(100vh-64px)] p-6 text-gray-900"
-      style={{ '--brand': BRAND } as React.CSSProperties}
-    >
-      {/* brand ribbon */}
-      <div
-        className="mb-5 h-1 w-full rounded-full"
-        style={{
-          background:
-            "linear-gradient(90deg, transparent 0%, var(--brand) 20%, var(--brand) 80%, transparent 100%)",
-        }}
-        aria-hidden
+    <div className="space-y-6">
+      <PageHeader
+        title={`${greeting()}${firstName ? `, ${firstName}` : ""}`}
+        description="Here is an overview of your care: upcoming visits, bills and your health record."
+        actions={
+          <Button asChild>
+            <Link href="/patient/search">
+              <CalendarPlus /> Book appointment
+            </Link>
+          </Button>
+        }
       />
 
-      {/* Header */}
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Patient Dashboard</h1>
-          <p className="mt-1 text-gray-600">
-            Welcome,{" "}
-            <span className="font-medium">
-              {user.profile?.firstName} {user.profile?.lastName}
-            </span>
-            !
-          </p>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Upcoming" value={isLoadingAppts ? "—" : upcoming.length} hint="appointments" icon={CalendarClock} tone="blue" />
+        <StatCard label="Completed" value={isLoadingAppts ? "—" : completed} hint="visits" icon={CalendarCheck} tone="green" />
+        <StatCard
+          label="Invoices due"
+          value={isLoadingInvoices ? "—" : pendingInvoices.length}
+          hint={pendingInvoices.length > 0 ? `${formatRwf(amountDue)} to pay` : "Nothing to pay"}
+          icon={Receipt}
+          tone="amber"
+        />
+        <StatCard label="Medications" value={isLoadingMeds ? "—" : (medications?.length ?? 0)} hint="on your record" icon={Pill} tone="violet" />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Next appointment */}
+        <div className="lg:col-span-2">
+          <Section
+            title="Next appointment"
+            action={
+              nextAppt ? (
+                <div className="flex items-center gap-2">
+                  <StatusBadge value={statusOf(nextAppt)} />
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href="/patient/appointments">
+                      Manage <ChevronRight />
+                    </Link>
+                  </Button>
+                </div>
+              ) : undefined
+            }
+            className="h-full"
+          >
+            {isLoadingAppts ? (
+              <Loading rows={2} />
+            ) : nextAppt ? (
+              <div className="space-y-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <div className="grid size-16 shrink-0 place-items-center rounded-2xl bg-brand-50 text-brand-700">
+                    <div className="text-center leading-tight">
+                      <p className="text-[11px] font-semibold uppercase">{fmt(startsAt(nextAppt), "MMM")}</p>
+                      <p className="text-2xl font-semibold">{fmt(startsAt(nextAppt), "d")}</p>
+                    </div>
+                  </div>
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-lg font-semibold text-slate-900">
+                      {nextAppt.doctor ? `Dr. ${nextAppt.doctor.firstName} ${nextAppt.doctor.lastName}` : "Doctor"}
+                    </p>
+                    <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                      <Stethoscope className="size-4 shrink-0" />
+                      {nextAppt.doctor?.specialty || "General Practice"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl bg-slate-50 p-3.5">
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <Clock className="size-3.5" /> Date and time
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-slate-900">
+                      {fmt(startsAt(nextAppt), "EEE, MMM d")} · {nextAppt.scheduledTime?.slice(0, 5)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3.5">
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      {nextAppt.appointmentType === "telemedicine" ? <Video className="size-3.5" /> : <MapPin className="size-3.5" />} Where
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-slate-900">
+                      {nextAppt.appointmentType === "telemedicine" ? "Video consultation" : "In person at the clinic"}
+                    </p>
+                  </div>
+                </div>
+
+                {nextAppt.reason || nextAppt.notes ? (
+                  <p className="text-sm text-slate-600">
+                    {nextAppt.reason}
+                    {nextAppt.reason && nextAppt.notes ? " · " : ""}
+                    {nextAppt.notes}
+                  </p>
+                ) : null}
+
+                <div className="border-t border-border pt-4">
+                  <VideoCall appointmentId={nextAppt.appointmentId} />
+                </div>
+              </div>
+            ) : (
+              <Empty
+                icon={CalendarClock}
+                action={
+                  <Button asChild size="sm">
+                    <Link href="/patient/search">Book an appointment</Link>
+                  </Button>
+                }
+              >
+                You have no upcoming appointments.
+              </Empty>
+            )}
+          </Section>
         </div>
 
-        <button
-          onClick={logout}
-          className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-        >
-          <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-            <path
-              d="M10 17l5-5-5-5M15 12H3M21 3v18"
-              stroke="currentColor"
-              strokeWidth="2"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-          Logout
-        </button>
-      </header>
-
-      {/* Quick stats */}
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {stats.map((s) => (
-          <div
-            key={s.label}
-            className="rounded-2xl border border-black/5 bg-white/80 p-5 shadow-xl backdrop-blur"
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-600">{s.label}</p>
-              <span
-                className="grid h-8 w-8 place-items-center rounded-lg ring-1 ring-black/5"
-                style={{ background: "var(--brand)" }}
-                aria-hidden
+        {/* Quick actions */}
+        <Section title="Quick actions">
+          <div className="grid gap-2">
+            {[
+              { href: "/patient/search", label: "Book appointment", hint: "Find a doctor and pick a time", icon: CalendarPlus },
+              { href: "/patient/invoices", label: "Pay invoices", hint: "Settle your consultation bills", icon: CreditCard },
+              { href: "/patient/medical-history", label: "Health record", hint: "Conditions, allergies, medications", icon: FileHeart },
+            ].map(({ href, label, hint, icon: Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                className="group flex items-center gap-3 rounded-xl border border-border p-3 transition hover:border-brand-200 hover:bg-brand-50/50"
               >
-                <svg viewBox="0 0 24 24" className="h-4 w-4 text-black/70">
-                  <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" fill="none" />
-                </svg>
-              </span>
-            </div>
-            <div className="mt-2 flex items-baseline gap-2">
-              <span className="text-3xl font-semibold tracking-tight">{s.value}</span>
-              <span className="text-sm text-gray-500">{s.sub}</span>
-            </div>
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600">
+                  <Icon className="size-5" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium text-slate-900">{label}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{hint}</span>
+                </span>
+                <ChevronRight className="size-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-brand-600" />
+              </Link>
+            ))}
           </div>
-        ))}
-      </section>
+        </Section>
+      </div>
 
-      {/* Main grid */}
-      <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Upcoming Appointment */}
-        <div className="lg:col-span-2 rounded-2xl border border-black/5 bg-white/80 p-6 shadow-xl backdrop-blur">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold tracking-tight">Next appointment</h2>
-            {nextAppt && (
-              <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 ring-1 ring-green-200">
-                {nextAppt.status}
-              </span>
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Recent appointments */}
+        <div className="lg:col-span-2">
+          <Section
+            title="Recent appointments"
+            action={
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/patient/appointments">View all</Link>
+              </Button>
+            }
+            flush
+          >
+            {isLoadingAppts ? (
+              <div className="p-5">
+                <Loading />
+              </div>
+            ) : recent.length === 0 ? (
+              <Empty icon={CalendarClock}>Your appointments will appear here.</Empty>
+            ) : (
+              <ul className="divide-y divide-border">
+                {recent.map((a) => (
+                  <li key={a.appointmentId} className="flex items-center gap-3 px-5 py-3">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-500">
+                      <Stethoscope className="size-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-slate-900">
+                        {a.doctor ? `Dr. ${a.doctor.firstName} ${a.doctor.lastName}` : "Doctor"}
+                        {a.doctor?.specialty ? <span className="font-normal text-muted-foreground"> · {a.doctor.specialty}</span> : null}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {fmt(startsAt(a), "d MMM yyyy")} · {a.scheduledTime?.slice(0, 5)}
+                      </p>
+                    </div>
+                    <StatusBadge value={statusOf(a)} />
+                  </li>
+                ))}
+              </ul>
             )}
-          </div>
-
-          {isLoadingAppts ? (
-            <p>Loading appointments...</p>
-          ) : nextAppt ? (
-            <>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-black/5 bg-white/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Date & time</p>
-                  <p className="mt-1 font-medium text-gray-900">{nextAppt.date}</p>
-                </div>
-                <div className="rounded-xl border border-black/5 bg-white/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Doctor</p>
-                  <p className="mt-1 font-medium text-gray-900">
-                    {nextAppt.doctor} • <span className="text-gray-600">{nextAppt.specialty}</span>
-                  </p>
-                </div>
-                <div className="sm:col-span-2 rounded-xl border border-black/5 bg-white/70 p-4">
-                  <p className="text-xs uppercase tracking-wide text-gray-500">Location</p>
-                  <p className="mt-1 font-medium text-gray-900">{nextAppt.location}</p>
-                  <p className="mt-2 text-sm text-gray-600">{nextAppt.notes}</p>
-                </div>
-              </div>
-
-              {/* Quick actions */}
-              <div className="mt-5 flex flex-wrap gap-2">
-                <button className="rounded-lg bg-[var(--brand)]/70 px-3 py-2 text-sm font-medium text-gray-900 ring-1 ring-[var(--brand)]/60 transition hover:bg-[var(--brand)]/90">
-                  Reschedule
-                </button>
-                <button className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">
-                  Message doctor
-                </button>
-                <button className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">
-                  View details
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="py-8 text-center text-gray-500">
-              <p>No upcoming appointments.</p>
-              <button className="mt-4 rounded-lg bg-[var(--brand)]/70 px-4 py-2 text-sm font-medium text-gray-900 ring-1 ring-[var(--brand)]/60">
-                Book an Appointment
-              </button>
-            </div>
-          )}
+          </Section>
         </div>
 
         {/* Medications */}
-        <div className="rounded-2xl border border-black/5 bg-white/80 p-6 shadow-xl backdrop-blur">
-          <h2 className="text-lg font-semibold tracking-tight">Medications</h2>
+        <Section
+          title="Medications"
+          action={
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/patient/medications">Manage</Link>
+            </Button>
+          }
+        >
           {isLoadingMeds ? (
-            <p className="mt-3 text-sm text-gray-500">Loading medications...</p>
+            <Loading rows={2} />
           ) : medications && medications.length > 0 ? (
-            <ul className="mt-3 space-y-3">
+            <ul className="space-y-2">
               {medications.map((m) => (
-                <li
-                  key={m.medicationId}
-                  className="flex items-start justify-between rounded-xl border border-black/5 bg-white/70 p-3"
-                >
-                  <div>
-                    <p className="font-medium text-gray-900">{m.medicationName}</p>
-                    <p className="text-sm text-gray-600">{m.frequency}</p>
+                <li key={m.medicationId} className="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-600">
+                    <Pill className="size-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-slate-900">{m.medicationName}</p>
+                    <p className="truncate text-xs text-muted-foreground">{m.frequency}</p>
                   </div>
-                  {/* <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700 ring-1 ring-black/5">
-                    Refills: ?
-                  </span> */}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="mt-3 text-sm text-gray-500">No active medications.</p>
+            <Empty icon={Pill}>No active medications.</Empty>
           )}
-          <button className="mt-4 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">
-            Manage medications
-          </button>
-        </div>
-
-        {/* Recent activity + Tips */}
-        <div className="lg:col-span-2 grid grid-cols-1 gap-6">
-          <div className="rounded-2xl border border-black/5 bg-white/80 p-6 shadow-xl backdrop-blur">
-            <h2 className="text-lg font-semibold tracking-tight">Recent activity</h2>
-            {/* Placeholder activity as before */}
-            <ul className="mt-3 space-y-3">
-              <li className="flex items-start gap-3">
-                <span className="mt-1 h-2.5 w-2.5 rounded-full bg-gray-300" />
-                <p className="text-sm text-gray-500">No recent activity.</p>
-              </li>
-            </ul>
-          </div>
-
-          <div className="rounded-2xl border border-black/5 bg-white/80 p-6 shadow-xl backdrop-blur">
-            <h2 className="text-lg font-semibold tracking-tight">Wellness tip</h2>
-            <p className="mt-2 text-gray-700">
-              Staying hydrated helps regulate blood pressure and energy. Aim for 6–8 glasses per day.
-            </p>
-            <button className="mt-4 rounded-lg bg-[var(--brand)]/70 px-3 py-2 text-sm font-medium text-gray-900 ring-1 ring-[var(--brand)]/60 transition hover:bg-[var(--brand)]/90">
-              See more tips
-            </button>
-          </div>
-        </div>
-
-        {/* Care team */}
-        <div className="rounded-2xl border border-black/5 bg-white/80 p-6 shadow-xl backdrop-blur">
-          <h2 className="text-lg font-semibold tracking-tight">Your care team</h2>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {[
-              { name: "Dr. A. Niyonzima", role: "Cardiologist" },
-              { name: "Nurse B. Uwase", role: "Primary Nurse" },
-            ].map((m) => (
-              <div key={m.name} className="flex items-center gap-3 rounded-xl border border-black/5 bg-white/70 p-3">
-                <span className="grid h-9 w-9 place-items-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700 ring-1 ring-black/5">
-                  {m.name.split(" ").map((p) => p[0]).join("").slice(0, 2).toUpperCase()}
-                </span>
-                <div>
-                  <p className="font-medium text-gray-900">{m.name}</p>
-                  <p className="text-sm text-gray-600">{m.role}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <button className="mt-4 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">
-            Message care team
-          </button>
-        </div>
-      </section>
+        </Section>
+      </div>
     </div>
   );
 }

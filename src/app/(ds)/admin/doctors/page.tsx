@@ -1,10 +1,17 @@
-// app/admin/doctors/page.tsx
-// app/admin/doctors/page.tsx
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthHooks } from '@/hooks/useAuth';
 import api from '@/lib/api/api';
+import { ChevronLeft, ChevronRight, Download, Pencil, Search, Stethoscope, Trash2 } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/input';
+import { DataTable, Empty, Loading, Notice, PageHeader, Section, StatusBadge, formatRwf } from '@/components/dashboard/common';
+
+const LABEL = 'block text-sm font-medium text-slate-700';
+// Native select styled like the ui Input (the change handler below reads e.target.name, so a native element is kept).
+const NATIVE_SELECT =
+  'h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20 disabled:opacity-50';
 
 interface Doctor {
   doctorId: string;
@@ -137,7 +144,11 @@ export default function DoctorsPage() {
 
   const refetchDoctors = async () => {
     try {
-      const response = await api.get('/doctors/');
+      const qs = new URLSearchParams();
+      if (filters.specialty) qs.append('specialty', filters.specialty);
+      if (filters.isActive) qs.append('isActive', filters.isActive);
+      if (filters.page) qs.append('page', filters.page);
+      const response = await api.get(`/doctors/${qs.toString() ? `?${qs.toString()}` : ''}`);
       let fetchedDoctors: Doctor[] = [];
       let fetchedPagination: Pagination | null = null;
 
@@ -336,413 +347,348 @@ export default function DoctorsPage() {
   };
 
   if (!user) {
-    return <p className="mt-10 text-center text-gray-500">Please log in to view the doctors page.</p>;
+    return <Notice tone="info">Please log in to view the doctors page.</Notice>;
   }
 
-  const BRAND = '#C4E1E1';
   const initials = (f?: string, l?: string) => ((f?.[0] ?? '') + (l?.[0] ?? '') || 'D').toUpperCase();
+  const selectedDoctor = selectedDoctorId ? doctors.find(x => x.doctorId === selectedDoctorId) : undefined;
+
+  const createFields = [
+    { label: 'First name', name: 'firstName', type: 'text' },
+    { label: 'Last name', name: 'lastName', type: 'text' },
+    { label: 'Email', name: 'email', type: 'email' },
+    { label: 'Phone number', name: 'phoneNumber', type: 'text' },
+    { label: 'Password', name: 'password', type: 'password' },
+    { label: 'Medical license number', name: 'medicalLicenseNumber', type: 'text' },
+    { label: 'Specialty', name: 'specialty', type: 'text' },
+  ];
 
   return (
-    <div className="p-6" style={{ '--brand': BRAND } as React.CSSProperties}>
-      {/* brand ribbon */}
-      <div
-        className="mx-auto mb-6 h-1 max-w-6xl rounded-full"
-        style={{ background: 'linear-gradient(90deg, transparent 0%, var(--brand) 20%, var(--brand) 80%, transparent 100%)' }}
-        aria-hidden
+    <div className="space-y-6">
+      <PageHeader
+        title="Doctors"
+        description={
+          <>
+            Register doctors, update their details and control who can take consultations.
+            {pagination?.total ? <> Total doctors: {pagination.total}.</> : null}
+          </>
+        }
+        actions={
+          <Button type="button" variant="outline" onClick={exportCSV}>
+            <Download /> Export CSV
+          </Button>
+        }
       />
 
-      <div className="mx-auto max-w-6xl space-y-6">
-        {/* Header */}
-        <header className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Doctors</h1>
-            <p className="mt-1 text-gray-600">
-              Manage doctors, <span className="font-medium">{user.profile?.firstName} {user.profile?.lastName}</span>.
-            </p>
-            {pagination?.total && (
-              <p className="mt-2 text-xs text-gray-500">Total doctors: {pagination.total}</p>
-            )}
+      {error && <Notice tone="error">{error}</Notice>}
+
+      {/* Create Doctor */}
+      <Section title="Create new doctor" description="Creates the user account and the doctor profile together.">
+        <form onSubmit={handleCreateDoctor} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {createFields.map(f => (
+            <div key={f.name} className="space-y-1.5">
+              <label htmlFor={`nd-${f.name}`} className={LABEL}>{f.label}</label>
+              <Input
+                id={`nd-${f.name}`}
+                type={f.type}
+                name={f.name}
+                value={newDoctor[f.name as keyof typeof newDoctor] as string}
+                onChange={(e) => handleInputChange(e, setNewDoctor, newDoctor)}
+                required
+              />
+            </div>
+          ))}
+          <div className="space-y-1.5">
+            <label htmlFor="nd-fee" className={LABEL}>Consultation fee (RWF)</label>
+            <Input
+              id="nd-fee"
+              type="number"
+              name="consultationFee"
+              value={newDoctor.consultationFee}
+              onChange={(e) => handleInputChange(e, setNewDoctor, newDoctor)}
+              required
+              min="0"
+              step="0.01"
+            />
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={exportCSV}
-              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow hover:bg-gray-50"
+          <div className="space-y-1.5">
+            <label htmlFor="nd-active" className={LABEL}>Active status</label>
+            <select
+              id="nd-active"
+              name="isActive"
+              value={newDoctor.isActive.toString()}
+              onChange={(e) => handleInputChange(e, setNewDoctor, newDoctor)}
+              className={NATIVE_SELECT}
             >
-              Export CSV
-            </button>
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+            </select>
           </div>
-        </header>
+          <div className="flex justify-end sm:col-span-2 lg:col-span-3">
+            <Button type="submit" disabled={loading} className="w-full sm:w-auto">
+              {loading ? 'Creating…' : 'Create doctor'}
+            </Button>
+          </div>
+        </form>
+      </Section>
 
-        {loading && (
-          <div className="space-y-3">
-            <div className="h-10 w-full animate-pulse rounded-xl bg-gray-200/60" />
-            <div className="h-10 w-full animate-pulse rounded-xl bg-gray-200/60" />
-            <div className="h-10 w-full animate-pulse rounded-xl bg-gray-200/60" />
-          </div>
-        )}
-        {error && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700" role="alert">
-            {error}
-          </div>
-        )}
-
+      {/* Table */}
+      <Section flush title="All doctors" description={`${visibleDoctors.length} shown`}>
         {/* Toolbar */}
-        <section className="rounded-2xl border border-black/5 bg-white/70 p-4 shadow-xl backdrop-blur">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-            <label className="grid gap-1">
-              <span className="text-sm font-medium text-gray-700">Search</span>
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search name, license, email, phone…"
-                className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-              />
-            </label>
-
-            <label className="grid gap-1">
-              <span className="text-sm font-medium text-gray-700">Filter by Specialty</span>
-              <input
-                name="specialty"
-                value={filters.specialty}
-                onChange={handleFilterChange}
-                placeholder="e.g., Cardiology"
-                className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-              />
-            </label>
-
-            <label className="grid gap-1">
-              <span className="text-sm font-medium text-gray-700">Status</span>
-              <select
-                name="isActive"
-                value={filters.isActive}
-                onChange={handleFilterChange}
-                className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-              >
-                <option value="">All</option>
-                <option value="true">Active</option>
-                <option value="false">Inactive</option>
-              </select>
-            </label>
-
-            <label className="grid gap-1">
-              <span className="text-sm font-medium text-gray-700">Sort</span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'newest' | 'name' | 'specialty' | 'feeAsc' | 'feeDesc')}
-                className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-              >
-                <option value="newest">Newest</option>
-                <option value="name">Name A–Z</option>
-                <option value="specialty">Specialty A–Z</option>
-                <option value="feeAsc">Fee ↑</option>
-                <option value="feeDesc">Fee ↓</option>
-              </select>
-            </label>
+        <div className="grid grid-cols-1 gap-3 border-b border-border px-5 py-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search name, license, email, phone…"
+              className="pl-9"
+              aria-label="Search doctors"
+            />
           </div>
-        </section>
+          <Input
+            name="specialty"
+            value={filters.specialty}
+            onChange={handleFilterChange}
+            placeholder="Filter by specialty, e.g. Cardiology"
+            aria-label="Filter by specialty"
+          />
+          <select
+            name="isActive"
+            value={filters.isActive}
+            onChange={handleFilterChange}
+            className={NATIVE_SELECT}
+            aria-label="Filter by status"
+          >
+            <option value="">All statuses</option>
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </select>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as 'newest' | 'name' | 'specialty' | 'feeAsc' | 'feeDesc')}
+            className={NATIVE_SELECT}
+            aria-label="Sort doctors"
+          >
+            <option value="newest">Newest</option>
+            <option value="name">Name A–Z</option>
+            <option value="specialty">Specialty A–Z</option>
+            <option value="feeAsc">Fee ↑</option>
+            <option value="feeDesc">Fee ↓</option>
+          </select>
+        </div>
 
-        {/* Create Doctor */}
-        <section className="rounded-2xl border border-black/5 bg-white/80 shadow-xl backdrop-blur">
-          <details open className="group">
-            <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4">
-              <span className="text-base font-medium text-gray-800">Create New Doctor</span>
-              <span className="text-xs text-gray-500 group-open:opacity-60">Collapse/Expand</span>
-            </summary>
-            <div className="h-px w-full bg-gradient-to-r from-transparent via-black/10 to-transparent" />
-            <div className="p-5">
-              <form onSubmit={handleCreateDoctor} className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {[
-                  { label: 'First Name', name: 'firstName', type: 'text' },
-                  { label: 'Last Name', name: 'lastName', type: 'text' },
-                  { label: 'Email', name: 'email', type: 'email' },
-                  { label: 'Phone Number', name: 'phoneNumber', type: 'text' },
-                  { label: 'Password', name: 'password', type: 'password' },
-                  { label: 'Medical License Number', name: 'medicalLicenseNumber', type: 'text' },
-                  { label: 'Specialty', name: 'specialty', type: 'text' },
-                ].map(f => (
-                  <div key={f.name}>
-                    <label className="block text-sm font-medium text-gray-700">{f.label}</label>
-                    <input
-                      type={f.type}
-                      name={f.name}
-                      value={newDoctor[f.name as keyof typeof newDoctor] as string}
-                      onChange={(e) => handleInputChange(e, setNewDoctor, newDoctor)}
-                      className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white/70 px-3 outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                      required
-                    />
-                  </div>
-                ))}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Consultation Fee</label>
-                  <input
-                    type="number"
-                    name="consultationFee"
-                    value={newDoctor.consultationFee}
-                    onChange={(e) => handleInputChange(e, setNewDoctor, newDoctor)}
-                    className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white/70 px-3 outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                    required
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Active Status</label>
-                  <select
-                    name="isActive"
-                    value={newDoctor.isActive.toString()}
-                    onChange={(e) => handleInputChange(e, setNewDoctor, newDoctor)}
-                    className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white/70 px-3 outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                  >
-                    <option value="true">Active</option>
-                    <option value="false">Inactive</option>
-                  </select>
-                </div>
-                <div className="md:col-span-2 flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="inline-flex items-center rounded-xl bg-[var(--brand)]/80 px-4 py-2.5 font-medium text-gray-900 ring-1 ring-[var(--brand)]/60 transition hover:bg-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {loading ? 'Creating…' : 'Create Doctor'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </details>
-        </section>
-
-        {/* Table */}
         {visibleDoctors.length > 0 ? (
-          <section className="overflow-hidden rounded-2xl border border-black/5 bg-white/80 shadow-xl backdrop-blur">
-            <div className="max-h-[65vh] overflow-auto">
-              <table className="w-full text-left">
-                <thead className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur">
-                  <tr className="[&>th]:px-4 [&>th]:py-3">
-                    <th className="text-gray-700">Doctor</th>
-                    <th className="text-gray-700">Specialty</th>
-                    <th className="text-gray-700">Contact</th>
-                    <th className="text-gray-700">License</th>
-                    <th className="text-gray-700">Fee</th>
-                    <th className="text-gray-700">Status</th>
-                    <th className="text-gray-700">Created</th>
-                    <th className="text-gray-700">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="[&>tr]:border-t [&>tr]:border-black/5">
-                  {visibleDoctors.map((d, idx) => (
-                    <tr
-                      key={d.doctorId}
-                      className={`transition-colors hover:bg-[var(--brand)]/10 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <span className="grid h-9 w-9 place-items-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700 ring-1 ring-black/5">
-                            {initials(
-                              d.user?.profile?.firstName ?? d.firstName,
-                              d.user?.profile?.lastName ?? d.lastName
-                            )}
-                          </span>
-                          <div>
-                            <div className="font-medium text-gray-900">{getDoctorName(d)}</div>
-                            <div className="text-xs text-gray-500">{d.doctorId}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">{d.specialty}</td>
-                      <td className="px-4 py-3">
-                        <div className="text-sm text-gray-700">{getDoctorEmail(d)}</div>
-                        <div className="text-xs text-gray-500">{getDoctorPhone(d)}</div>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">#{d.medicalLicenseNumber}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">${d.consultationFee}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`rounded-full px-2.5 py-0.5 text-xs ring-1 ${d.isActive ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-rose-50 text-rose-700 ring-rose-200'}`}>
-                          {d.isActive ? 'Active' : 'Inactive'}
+          <>
+            <DataTable>
+              <thead>
+                <tr>
+                  <th>Doctor</th>
+                  <th>Specialty</th>
+                  <th>Contact</th>
+                  <th>License</th>
+                  <th className="text-right">Fee</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th className="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleDoctors.map((d) => (
+                  <tr key={d.doctorId} className={d.doctorId === selectedDoctorId ? 'bg-brand-50/60' : undefined}>
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700">
+                          {initials(
+                            d.user?.profile?.firstName ?? d.firstName,
+                            d.user?.profile?.lastName ?? d.lastName
+                          )}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">{new Date(d.createdAt).toLocaleDateString()}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => setSelectedDoctorId(d.doctorId)}
-                            className="rounded-lg bg-yellow-100 px-3 py-1.5 text-xs font-medium text-yellow-900 ring-1 ring-yellow-200 hover:bg-yellow-200"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteDoctor(d.doctorId)}
-                            className="rounded-lg bg-rose-100 px-3 py-1.5 text-xs font-medium text-rose-900 ring-1 ring-rose-200 hover:bg-rose-200"
-                          >
-                            Delete
-                          </button>
+                        <div className="min-w-0">
+                          <div className="whitespace-nowrap font-medium text-slate-900">{getDoctorName(d)}</div>
+                          <div className="font-mono text-xs text-muted-foreground" title={d.doctorId}>{d.doctorId.slice(0, 8)}</div>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* inline editor */}
-            {selectedDoctorId && (
-              <div className="border-t border-black/5 p-5">
-                {(() => {
-                  const d = doctors.find(x => x.doctorId === selectedDoctorId)!;
-                  return (
-                    <div className="grid gap-6 md:grid-cols-2">
-                      <div className="rounded-xl border border-black/5 bg-white p-4">
-                        <h3 className="mb-3 text-sm font-semibold text-gray-800">Update Doctor</h3>
-                        <form
-                          onSubmit={(e) => { e.preventDefault(); handleUpdateDoctor(d.doctorId); }}
-                          className="grid grid-cols-1 gap-4"
-                        >
-                          <label className="grid gap-1">
-                            <span className="text-sm font-medium text-gray-700">Medical License Number</span>
-                            <input
-                              type="text"
-                              name="medicalLicenseNumber"
-                              value={updateDoctor.medicalLicenseNumber ?? d.medicalLicenseNumber}
-                              onChange={(e) => handleInputChange(e, setUpdateDoctor, updateDoctor)}
-                              className="h-11 rounded-xl border border-black/10 bg-white px-3 outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                            />
-                          </label>
-                          <label className="grid gap-1">
-                            <span className="text-sm font-medium text-gray-700">Specialty</span>
-                            <input
-                              type="text"
-                              name="specialty"
-                              value={updateDoctor.specialty ?? d.specialty}
-                              onChange={(e) => handleInputChange(e, setUpdateDoctor, updateDoctor)}
-                              className="h-11 rounded-xl border border-black/10 bg-white px-3 outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                            />
-                          </label>
-                          <label className="grid gap-1">
-                            <span className="text-sm font-medium text-gray-700">Consultation Fee</span>
-                            <input
-                              type="number"
-                              name="consultationFee"
-                              value={updateDoctor.consultationFee ?? d.consultationFee}
-                              onChange={(e) => handleInputChange(e, setUpdateDoctor, updateDoctor)}
-                              min={0}
-                              step="0.01"
-                              className="h-11 rounded-xl border border-black/10 bg-white px-3 outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                            />
-                          </label>
-                          <label className="grid gap-1">
-                            <span className="text-sm font-medium text-gray-700">Active Status</span>
-                            <select
-                              name="isActive"
-                              value={(updateDoctor.isActive ?? d.isActive).toString()}
-                              onChange={(e) => handleInputChange(e, setUpdateDoctor, updateDoctor)}
-                              className="h-11 rounded-xl border border-black/10 bg-white px-3 outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                            >
-                              <option value="true">Active</option>
-                              <option value="false">Inactive</option>
-                            </select>
-                          </label>
-                          <div className="flex gap-2 pt-2">
-                            <button
-                              type="submit"
-                              disabled={loading}
-                              className="rounded-lg bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700 disabled:opacity-60"
-                            >
-                              {loading ? 'Updating…' : 'Update'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedDoctorId(null)}
-                              className="rounded-lg bg-gray-200 px-4 py-2 text-gray-900 hover:bg-gray-300"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </form>
                       </div>
-
-                      <div className="rounded-xl border border-black/5 bg-white p-4">
-                        <h3 className="mb-3 text-sm font-semibold text-gray-800">Update Status</h3>
-                        <form
-                          onSubmit={(e) => { e.preventDefault(); handleUpdateStatus(d.doctorId); }}
-                          className="grid grid-cols-1 gap-4"
+                    </td>
+                    <td className="whitespace-nowrap text-slate-700">{d.specialty}</td>
+                    <td>
+                      <div className="whitespace-nowrap text-slate-700">{getDoctorEmail(d)}</div>
+                      <div className="text-xs text-muted-foreground">{getDoctorPhone(d)}</div>
+                    </td>
+                    <td className="whitespace-nowrap text-slate-700">#{d.medicalLicenseNumber}</td>
+                    <td className="whitespace-nowrap text-right tabular-nums text-slate-700">{formatRwf(d.consultationFee)}</td>
+                    <td className="whitespace-nowrap"><StatusBadge value={d.isActive ? 'active' : 'inactive'} /></td>
+                    <td className="whitespace-nowrap text-slate-600">{new Date(d.createdAt).toLocaleDateString()}</td>
+                    <td>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedDoctorId(d.doctorId);
+                            // The editor renders below the table; bring it into view.
+                            setTimeout(() => document.getElementById('doctor-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+                          }}
                         >
-                          <label className="grid gap-1">
-                            <span className="text-sm font-medium text-gray-700">Status</span>
-                            <select
-                              name="isActive"
-                              value={updateStatus.isActive.toString()}
-                              onChange={(e) => handleInputChange(e, setUpdateStatus, updateStatus)}
-                              className="h-11 rounded-xl border border-black/10 bg-white px-3 outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                            >
-                              <option value="true">Active</option>
-                              <option value="false">Inactive</option>
-                            </select>
-                          </label>
-                          <label className="grid gap-1">
-                            <span className="text-sm font-medium text-gray-700">Reason (if inactive)</span>
-                            <input
-                              type="text"
-                              name="reason"
-                              value={updateStatus.reason || ''}
-                              onChange={(e) => handleInputChange(e, setUpdateStatus, updateStatus)}
-                              placeholder="Optional reason"
-                              className="h-11 rounded-xl border border-black/10 bg-white px-3 outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                            />
-                          </label>
-                          <div className="flex gap-2 pt-2">
-                            <button
-                              type="submit"
-                              disabled={loading}
-                              className="rounded-lg bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700 disabled:opacity-60"
-                            >
-                              {loading ? 'Updating…' : 'Update Status'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedDoctorId(null)}
-                              className="rounded-lg bg-gray-200 px-4 py-2 text-gray-900 hover:bg-gray-300"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </form>
+                          <Pencil /> Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                          onClick={() => handleDeleteDoctor(d.doctorId)}
+                        >
+                          <Trash2 /> Delete
+                        </Button>
                       </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </DataTable>
+
             {/* pagination */}
             {pagination && (
-              <div className="flex items-center justify-between border-t border-black/5 p-4">
-                <p className="text-xs text-gray-500">
-                  Page {pagination.page} of {pagination.pages} • Total: {pagination.total}
+              <div className="flex flex-col gap-3 border-t border-border px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-muted-foreground">
+                  Page {pagination.page} of {pagination.pages} · Total: {pagination.total}
                 </p>
                 <div className="flex gap-2">
-                  <button
+                  <Button
+                    variant="outline"
+                    size="sm"
                     disabled={!pagination.hasPrev || loading}
                     onClick={() => handlePageChange(pagination.page - 1)}
-                    className="rounded-lg border border-black/10 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60"
                   >
-                    Previous
-                  </button>
-                  <button
+                    <ChevronLeft /> Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     disabled={!pagination.hasNext || loading}
                     onClick={() => handlePageChange(pagination.page + 1)}
-                    className="rounded-lg border border-black/10 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60"
                   >
-                    Next
-                  </button>
+                    Next <ChevronRight />
+                  </Button>
                 </div>
               </div>
             )}
-          </section>
+          </>
+        ) : loading ? (
+          <div className="px-5 py-3"><Loading label="Loading doctors…" /></div>
         ) : (
-          <div className="rounded-2xl border border-black/5 bg-white/80 p-12 text-center text-gray-600 shadow-xl backdrop-blur">
-            {loading ? 'Loading doctors…' : 'No doctors found.'}
-          </div>
+          <Empty icon={Stethoscope}>No doctors found.</Empty>
         )}
-      </div>
+      </Section>
+
+      {/* inline editor */}
+      {selectedDoctor && (
+        <div id="doctor-editor" className="grid scroll-mt-20 gap-6 lg:grid-cols-2">
+          <Section
+            title="Update doctor"
+            description={getDoctorName(selectedDoctor)}
+          >
+            <form
+              onSubmit={(e) => { e.preventDefault(); handleUpdateDoctor(selectedDoctor.doctorId); }}
+              className="grid grid-cols-1 gap-4"
+            >
+              <div className="space-y-1.5">
+                <label htmlFor="ud-license" className={LABEL}>Medical license number</label>
+                <Input
+                  id="ud-license"
+                  type="text"
+                  name="medicalLicenseNumber"
+                  value={updateDoctor.medicalLicenseNumber ?? selectedDoctor.medicalLicenseNumber}
+                  onChange={(e) => handleInputChange(e, setUpdateDoctor, updateDoctor)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="ud-specialty" className={LABEL}>Specialty</label>
+                <Input
+                  id="ud-specialty"
+                  type="text"
+                  name="specialty"
+                  value={updateDoctor.specialty ?? selectedDoctor.specialty}
+                  onChange={(e) => handleInputChange(e, setUpdateDoctor, updateDoctor)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="ud-fee" className={LABEL}>Consultation fee (RWF)</label>
+                <Input
+                  id="ud-fee"
+                  type="number"
+                  name="consultationFee"
+                  value={updateDoctor.consultationFee ?? selectedDoctor.consultationFee}
+                  onChange={(e) => handleInputChange(e, setUpdateDoctor, updateDoctor)}
+                  min={0}
+                  step="0.01"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="ud-active" className={LABEL}>Active status</label>
+                <select
+                  id="ud-active"
+                  name="isActive"
+                  value={(updateDoctor.isActive ?? selectedDoctor.isActive).toString()}
+                  onChange={(e) => handleInputChange(e, setUpdateDoctor, updateDoctor)}
+                  className={NATIVE_SELECT}
+                >
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button type="submit" disabled={loading}>
+                  {loading ? 'Updating…' : 'Update'}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setSelectedDoctorId(null)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </Section>
+
+          <Section title="Update status" description="Deactivated doctors cannot take new appointments.">
+            <form
+              onSubmit={(e) => { e.preventDefault(); handleUpdateStatus(selectedDoctor.doctorId); }}
+              className="grid grid-cols-1 gap-4"
+            >
+              <div className="space-y-1.5">
+                <label htmlFor="us-active" className={LABEL}>Status</label>
+                <select
+                  id="us-active"
+                  name="isActive"
+                  value={updateStatus.isActive.toString()}
+                  onChange={(e) => handleInputChange(e, setUpdateStatus, updateStatus)}
+                  className={NATIVE_SELECT}
+                >
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="us-reason" className={LABEL}>Reason (if inactive)</label>
+                <Input
+                  id="us-reason"
+                  type="text"
+                  name="reason"
+                  value={updateStatus.reason || ''}
+                  onChange={(e) => handleInputChange(e, setUpdateStatus, updateStatus)}
+                  placeholder="Optional reason"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button type="submit" disabled={loading}>
+                  {loading ? 'Updating…' : 'Update status'}
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setSelectedDoctorId(null)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </Section>
+        </div>
+      )}
     </div>
   );
 }

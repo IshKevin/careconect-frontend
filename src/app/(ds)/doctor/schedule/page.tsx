@@ -1,36 +1,41 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { CalendarDays, CalendarRange, Clock, Plus, RefreshCcw, Timer, Trash2 } from 'lucide-react';
 import { useAuthHooks } from '@/hooks/useAuth';
+import { useCreateAvailability, useDeleteAvailability } from '@/hooks/useSchedule';
 import api from '@/lib/api/api';
-import { 
-  Calendar, 
-  Clock, 
-  Plus, 
-  Trash2, 
-  CheckCircle2, 
-  AlertCircle,
-  RefreshCcw,
-  CalendarDays
-} from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import type { DoctorAvailability } from '@/types/schedule';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Empty, Loading, Notice, PageHeader, Section, StatCard, errorText } from '@/components/dashboard/common';
+import { cn } from '@/lib/utils';
 
-interface ScheduleSlot {
-  slotId: string;
-  dayOfWeek: string;
-  startTime: string;
-  endTime: string;
-  isAvailable: boolean;
-}
+// dayOfWeek from the API is 0-6, Sunday first. The grid shows the working week Monday first.
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
-const BRAND = '#C4E1E1';
+const hhmm = (t: string) => t?.slice(0, 5) ?? '';
+const minutes = (t: string) => {
+  const [h, m] = t.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+
+const selectClass =
+  'h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20';
 
 export default function DoctorSchedulePage() {
   const { user } = useAuthHooks();
-  const [slots, setSlots] = useState<ScheduleSlot[]>([]);
+  const [slots, setSlots] = useState<DoctorAvailability[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const createAvailability = useCreateAvailability();
+  const deleteAvailability = useDeleteAvailability();
+  const [addOpen, setAddOpen] = useState(false);
+  const [form, setForm] = useState({ dayOfWeek: 1, startTime: '09:00', endTime: '17:00', slotDuration: 30 });
+  const [formError, setFormError] = useState<string | null>(null);
 
   const fetchSchedule = async () => {
     if (!user) return;
@@ -47,6 +52,7 @@ export default function DoctorSchedulePage() {
     } catch (err: unknown) {
       console.error('Fetch schedule error:', err);
       setSlots([]);
+      setError(errorText(err, 'Your schedule could not be loaded.'));
     } finally {
       setLoading(false);
     }
@@ -54,143 +60,221 @@ export default function DoctorSchedulePage() {
 
   useEffect(() => {
     fetchSchedule();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  const openAdd = (dayOfWeek?: number) => {
+    setForm((f) => ({ ...f, dayOfWeek: dayOfWeek ?? f.dayOfWeek }));
+    setFormError(null);
+    setAddOpen(true);
+  };
+
+  const submitAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user?.doctorId) return;
+    if (minutes(form.endTime) <= minutes(form.startTime)) {
+      setFormError('The end time must be after the start time.');
+      return;
+    }
+    setFormError(null);
+    try {
+      await createAvailability.mutateAsync({
+        doctorId: user.doctorId,
+        data: {
+          doctorId: user.doctorId,
+          dayOfWeek: form.dayOfWeek,
+          startTime: `${form.startTime}:00`,
+          endTime: `${form.endTime}:00`,
+          slotDuration: form.slotDuration,
+          isActive: true,
+        },
+      });
+      setAddOpen(false);
+      fetchSchedule();
+    } catch (err) {
+      setFormError(errorText(err, 'These hours could not be saved.'));
+    }
+  };
+
+  const remove = async (slot: DoctorAvailability) => {
+    if (!window.confirm(`Remove ${DAYS[slot.dayOfWeek]} ${hhmm(slot.startTime)}–${hhmm(slot.endTime)} from your schedule?`)) return;
+    setError(null);
+    try {
+      await deleteAvailability.mutateAsync(slot.availabilityId);
+      fetchSchedule();
+    } catch (err) {
+      setError(errorText(err, 'These hours could not be removed.'));
+    }
+  };
+
   if (!user || user.userType !== 'doctor') {
-    return (
-      <div className="flex min-h-[400px] flex-col items-center justify-center gap-4 text-center">
-        <div className="rounded-full bg-rose-50 p-3 ring-8 ring-rose-50/50">
-          <AlertCircle className="h-8 w-8 text-rose-500" />
-        </div>
-        <div>
-          <h3 className="text-xl font-bold text-gray-900">Access Denied</h3>
-          <p className="text-gray-500">Please log in as a doctor to manage your schedule.</p>
-        </div>
-      </div>
-    );
+    return <Notice tone="warning">Please log in as a doctor to manage your schedule.</Notice>;
   }
 
+  const active = slots.filter((s) => s.isActive);
+  const daysCovered = new Set(active.map((s) => s.dayOfWeek)).size;
+  const weeklyMinutes = active.reduce((sum, s) => sum + Math.max(0, minutes(s.endTime) - minutes(s.startTime)), 0);
+  const weeklyHours = Math.round((weeklyMinutes / 60) * 10) / 10;
+  const today = new Date().getDay();
+
   return (
-    <div className="p-6" style={{ '--brand': BRAND } as React.CSSProperties}>
-      <div className="mx-auto mb-6 h-1 max-w-6xl rounded-full" style={{ background: 'linear-gradient(90deg, transparent 0%, var(--brand) 20%, var(--brand) 80%, transparent 100%)' }} aria-hidden />
-
-      <div className="mx-auto max-w-6xl space-y-6">
-        <header className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-gray-900">My Schedule</h1>
-            <p className="mt-1 text-gray-600">
-              Manage your availability and appointment slots, <span className="font-medium">Dr. {user.profile?.lastName}</span>.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={fetchSchedule} variant="outline" size="sm" className="rounded-xl border-black/10">
-              <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
+    <div className="space-y-6">
+      <PageHeader
+        title="Weekly schedule"
+        description="Your recurring consultation hours. Patients can book open slots inside these hours."
+        actions={
+          <>
+            <Button variant="outline" onClick={fetchSchedule} disabled={loading}>
+              <RefreshCcw className={cn(loading && 'animate-spin')} /> Refresh
             </Button>
-            <Button size="sm" className="bg-[var(--brand)] text-gray-900 hover:bg-[var(--brand)]/80 rounded-xl">
-              <Plus className="mr-2 h-4 w-4" /> Add Slot
+            <Button onClick={() => openAdd()} disabled={!user.doctorId}>
+              <Plus /> Add hours
             </Button>
-          </div>
-        </header>
+          </>
+        }
+      />
 
-        {error && (
-          <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700" role="alert">
-            <AlertCircle className="mt-0.5 h-4 w-4" />
-            <span>{error}</span>
-          </div>
-        )}
+      {error ? <Notice tone="error">{error}</Notice> : null}
 
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="md:col-span-2 rounded-2xl border border-black/5 bg-white shadow-xl">
-            <CardHeader className="border-b border-black/5">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <CalendarDays className="h-5 w-5 text-gray-500" />
-                Weekly Availability
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="p-12 space-y-4">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-16 w-full animate-pulse rounded-xl bg-gray-50" />
-                  ))}
-                </div>
-              ) : slots.length > 0 ? (
-                <div className="divide-y divide-black/5">
-                  {slots.map((slot) => (
-                    <div key={slot.slotId} className="flex items-center justify-between p-4 hover:bg-gray-50/50 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-gray-900">{slot.dayOfWeek}</span>
-                          <span className="text-sm text-gray-500 flex items-center gap-1">
-                            <Clock className="h-3 w-3" /> {slot.startTime} - {slot.endTime}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {slot.isAvailable ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
-                            Available
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2.5 py-0.5 text-xs font-medium text-gray-700 ring-1 ring-gray-200">
-                            Booked
-                          </span>
-                        )}
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:bg-rose-50">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center p-20 text-center space-y-4">
-                  <div className="rounded-2xl bg-gray-50 p-4 ring-1 ring-black/5">
-                    <Calendar className="h-8 w-8 text-gray-300" />
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Active time blocks" value={active.length} hint={`${slots.length - active.length} paused`} icon={CalendarRange} tone="blue" />
+        <StatCard label="Days covered" value={`${daysCovered} / 7`} icon={CalendarDays} tone="violet" />
+        <StatCard label="Hours per week" value={weeklyHours} hint="Across active blocks" icon={Timer} tone="green" />
+      </div>
+
+      {loading ? (
+        <Section title="This week"><Loading rows={4} /></Section>
+      ) : slots.length === 0 ? (
+        <Section title="This week">
+          <Empty
+            icon={CalendarDays}
+            action={
+              <Button onClick={() => openAdd()} disabled={!user.doctorId}>
+                <Plus /> Add your first hours
+              </Button>
+            }
+          >
+            No consultation hours yet. Add your availability so patients can start booking appointments.
+          </Empty>
+        </Section>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
+          {WEEK_ORDER.map((day) => {
+            const daySlots = slots
+              .filter((s) => s.dayOfWeek === day)
+              .sort((a, b) => minutes(a.startTime) - minutes(b.startTime));
+            const isToday = day === today;
+            return (
+              <div
+                key={day}
+                className={cn(
+                  'flex flex-col rounded-2xl border border-border bg-card shadow-[var(--shadow-card)]',
+                  isToday && 'ring-2 ring-brand-200',
+                )}
+              >
+                <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900">{DAYS[day]}</p>
+                    {isToday ? <p className="text-xs font-medium text-brand-600">Today</p> : null}
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">No slots defined yet</h3>
-                    <p className="text-sm text-gray-500">Add your first availability slot to start receiving appointments.</p>
-                  </div>
-                  <Button size="sm" className="bg-[var(--brand)] text-gray-900 hover:bg-[var(--brand)]/80 rounded-xl">
-                    <Plus className="mr-2 h-4 w-4" /> Define Schedule
+                  <Button variant="ghost" size="icon" className="size-8" onClick={() => openAdd(day)} aria-label={`Add hours on ${DAYS[day]}`}>
+                    <Plus />
                   </Button>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <div className="flex-1 space-y-2 p-3">
+                  {daySlots.length === 0 ? (
+                    <p className="px-1 py-2 text-sm text-muted-foreground">Not available</p>
+                  ) : (
+                    daySlots.map((slot) => (
+                      <div
+                        key={slot.availabilityId}
+                        className={cn(
+                          'group flex items-center gap-2 rounded-xl border px-3 py-2',
+                          slot.isActive ? 'border-brand-100 bg-brand-50' : 'border-border bg-slate-50 opacity-70',
+                        )}
+                      >
+                        <Clock className={cn('size-3.5 shrink-0', slot.isActive ? 'text-brand-600' : 'text-slate-400')} />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium tabular-nums text-slate-900">
+                            {hhmm(slot.startTime)}–{hhmm(slot.endTime)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {slot.slotDuration} min slots{slot.isActive ? '' : ' · paused'}
+                          </p>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                          onClick={() => remove(slot)}
+                          disabled={deleteAvailability.isPending}
+                          aria-label={`Remove ${DAYS[day]} ${hhmm(slot.startTime)}–${hhmm(slot.endTime)}`}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
-          <aside className="space-y-6">
-            <Card className="rounded-2xl border border-black/5 bg-gradient-to-br from-white to-gray-50 shadow-xl">
-              <CardHeader pb-2>
-                <CardTitle className="text-base font-semibold">Quick Stats</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between items-center p-3 rounded-xl bg-white border border-black/5">
-                  <span className="text-sm text-gray-600 font-medium">Active Slots</span>
-                  <span className="text-lg font-bold text-gray-900">{slots.filter(s => s.isAvailable).length}</span>
-                </div>
-                <div className="flex justify-between items-center p-3 rounded-xl bg-white border border-black/5">
-                  <span className="text-sm text-gray-600 font-medium">Booked This Week</span>
-                  <span className="text-lg font-bold text-gray-900">{slots.filter(s => !s.isAvailable).length}</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-2xl border border-[var(--brand)]/10 bg-white/60 backdrop-blur shadow-xl">
-              <CardContent pd-6 className="p-6">
-                <div className="flex items-center gap-2 text-emerald-700 mb-2">
-                  <CheckCircle2 className="h-5 w-5" />
-                  <span className="font-semibold text-sm">Status: Active</span>
-                </div>
-                <p className="text-xs text-gray-600 leading-relaxed">
-                  Your schedule is currently live. Patients can discover these slots and book appointments in real-time.
-                </p>
-              </CardContent>
-            </Card>
-          </aside>
-        </section>
-      </div>
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="bg-card sm:rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Add consultation hours</DialogTitle>
+            <DialogDescription>These hours repeat every week. Patients book slots of the length you choose.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitAdd} className="space-y-4">
+            <div className="space-y-1.5">
+              <label htmlFor="day" className="text-sm font-medium text-slate-700">Day</label>
+              <select
+                id="day"
+                className={selectClass}
+                value={form.dayOfWeek}
+                onChange={(e) => setForm({ ...form, dayOfWeek: Number(e.target.value) })}
+              >
+                {WEEK_ORDER.map((d) => (
+                  <option key={d} value={d}>{DAYS[d]}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label htmlFor="start" className="text-sm font-medium text-slate-700">From</label>
+                <Input id="start" type="time" required value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="end" className="text-sm font-medium text-slate-700">To</label>
+                <Input id="end" type="time" required value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="duration" className="text-sm font-medium text-slate-700">Slot length</label>
+              <select
+                id="duration"
+                className={selectClass}
+                value={form.slotDuration}
+                onChange={(e) => setForm({ ...form, slotDuration: Number(e.target.value) })}
+              >
+                {[15, 20, 30, 45, 60].map((m) => (
+                  <option key={m} value={m}>{m} minutes</option>
+                ))}
+              </select>
+            </div>
+            {formError ? <Notice tone="error">{formError}</Notice> : null}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={createAvailability.isPending}>
+                {createAvailability.isPending ? 'Saving…' : 'Save hours'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

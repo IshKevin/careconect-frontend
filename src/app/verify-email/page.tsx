@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Notice, errorText } from '@/components/dashboard/common';
+import { AuthShell } from '@/components/Auth/AuthShell';
 import { confirmEmailVerification } from '@/lib/api/verification';
 
 function VerifyEmailInner() {
@@ -28,9 +29,9 @@ function VerifyEmailInner() {
   }, [token]);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-4">
-      <h1 className="text-2xl font-semibold text-gray-900">Email verification</h1>
-      {state === 'checking' ? <p className="text-sm text-gray-600">Checking your link…</p> : null}
+    <AuthShell title="Email verification">
+      <div className="space-y-6">
+      {state === 'checking' ? <p className="text-sm text-slate-500">Checking your link…</p> : null}
       {state === 'done' ? (
         <Notice tone="success">Your email address is verified. You can now book appointments and make payments.</Notice>
       ) : null}
@@ -39,14 +40,15 @@ function VerifyEmailInner() {
           {message} You can request a new link from your dashboard once you sign in.
         </Notice>
       ) : null}
-      <Link href="/login"><Button variant="outline">Go to sign in</Button></Link>
-    </main>
+      <Button asChild size="lg" className="w-full"><Link href="/login">Go to sign in</Link></Button>
+      </div>
+    </AuthShell>
   );
 }
 
 export default function VerifyEmailPage() {
   return (
-    <Suspense fallback={<p className="p-6 text-sm text-gray-600">Loading…</p>}>
+    <Suspense fallback={<p className="p-6 text-sm text-slate-500">Loading…</p>}>
       <VerifyEmailInner />
     </Suspense>
   );

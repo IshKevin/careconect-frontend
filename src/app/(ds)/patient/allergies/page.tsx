@@ -1,9 +1,13 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { Pencil, Plus, Search, ShieldAlert, Trash2 } from 'lucide-react';
 import { useAuthHooks } from '@/hooks/useAuth';
 import { safeLocalStorage } from '@/lib/storage';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/input';
+import { Empty, Loading, Notice, PageHeader, Section, formatDate } from '@/components/dashboard/common';
+import { cn } from '@/lib/utils';
 
 type Severity = 'Mild' | 'Moderate' | 'Severe';
 
@@ -15,37 +19,29 @@ interface Allergy {
   recordedAt: string; // ISO date
 }
 
-const BRAND = '#C4E1E1';
 const STORAGE_KEY = 'patient_allergies_dummy';
 
 function makeId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Seed data used only when nothing is in localStorage yet
-const seedAllergies: Allergy[] = [
-  {
-    allergyId: makeId(),
-    allergenName: 'Penicillin',
-    reactionSeverity: 'Severe',
-    notes: 'Anaphylaxis reported in 2018.',
-    recordedAt: new Date().toISOString(),
-  },
-  {
-    allergyId: makeId(),
-    allergenName: 'Peanuts',
-    reactionSeverity: 'Moderate',
-    notes: 'Hives & swelling; carries antihistamine.',
-    recordedAt: new Date(Date.now() - 86400000 * 20).toISOString(),
-  },
-  {
-    allergyId: makeId(),
-    allergenName: 'Pollen',
-    reactionSeverity: 'Mild',
-    notes: 'Seasonal rhinitis, springtime.',
-    recordedAt: new Date(Date.now() - 86400000 * 60).toISOString(),
-  },
-];
+// Earlier versions of this page wrote three made-up sample allergies into the browser. Drop them on load
+// so a patient never sees allergies they did not enter.
+const OLD_SAMPLE_ENTRIES = new Set([
+  'Penicillin|Anaphylaxis reported in 2018.',
+  'Peanuts|Hives & swelling; carries antihistamine.',
+  'Pollen|Seasonal rhinitis, springtime.',
+]);
+
+const SEVERITY_CLASS: Record<Severity, string> = {
+  Severe: 'bg-rose-50 text-rose-700 ring-rose-600/20',
+  Moderate: 'bg-amber-50 text-amber-700 ring-amber-600/20',
+  Mild: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
+};
+
+const selectClass =
+  'h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20';
+const labelClass = 'text-sm font-medium text-slate-700';
 
 export default function AllergiesPage() {
   const { user } = useAuthHooks();
@@ -81,16 +77,13 @@ export default function AllergiesPage() {
     );
   }, [allergies, query]);
 
-  // Load from localStorage (or seed) on mount
+  // Load from localStorage on mount
   useEffect(() => {
     try {
       const raw = safeLocalStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed: Allergy[] = JSON.parse(raw);
-        setAllergies(parsed);
-      } else {
-        setAllergies(seedAllergies);
-        safeLocalStorage.setItem(STORAGE_KEY, JSON.stringify(seedAllergies));
+        setAllergies(parsed.filter((a) => !OLD_SAMPLE_ENTRIES.has(`${a.allergenName}|${a.notes ?? ''}`)));
       }
     } catch {
       setError('Failed to load allergies from local storage.');
@@ -168,232 +161,175 @@ export default function AllergiesPage() {
     setAllergies((prev) => prev.filter((a) => a.allergyId !== id));
   };
 
+  const severityBadge = (sev: Severity) => (
+    <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset', SEVERITY_CLASS[sev] ?? SEVERITY_CLASS.Mild)}>
+      {sev}
+    </span>
+  );
+
   return (
-    <div
-      className="p-6 text-gray-900"
-      style={{ ['--brand' as any]: BRAND } as React.CSSProperties}
-    >
-      {/* brand ribbon */}
-      <div
-        className="mb-5 h-1 w-full rounded-full"
-        style={{
-          background:
-            'linear-gradient(90deg, transparent 0%, var(--brand) 22%, var(--brand) 78%, transparent 100%)',
-        }}
-        aria-hidden
-      />
+    <div className="space-y-6">
+      <PageHeader title="Allergies" description="Keep a list of what you are allergic to and how severe the reaction is." />
 
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Allergies</h1>
-        <p className="mt-1 text-gray-600">
-          Manage your allergies,{' '}
-          <span className="font-medium">
-            {user.profile?.firstName} {user.profile?.lastName}
-          </span>
-          .
-        </p>
-      </header>
+      <Notice tone="warning">
+        This list is saved in this browser only and is not yet shared with your doctors. Always tell your doctor about serious allergies.
+      </Notice>
 
-      {/* Notifications */}
-      {error && (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700" role="alert">
-          {error}
-        </div>
-      )}
-      {loading && (
-        <div className="mb-4 rounded-xl border border-black/5 bg-white/80 p-4 text-sm text-gray-600 shadow-sm backdrop-blur">
-          Loading...
-        </div>
-      )}
+      {error && <Notice tone="error">{error}</Notice>}
 
-      {/* Create */}
-      <section className="rounded-2xl border border-black/5 bg-white/80 shadow-xl backdrop-blur">
-        <details open className="group">
-          <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4">
-            <span className="text-base font-medium text-gray-800">Add new allergy</span>
-            <span className="text-xs text-gray-500 group-open:opacity-60">Collapse/Expand</span>
-          </summary>
-          <div className="h-px w-full bg-gradient-to-r from-transparent via-black/10 to-transparent" />
-          <div className="p-5">
-            <form onSubmit={addAllergy} className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div className="md:col-span-1">
-                <label className="block text-sm font-medium text-gray-700">Allergen</label>
-                <input
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Create */}
+        <Section title="Add an allergy" className="h-fit">
+          <form onSubmit={addAllergy} className="grid gap-4">
+            <label className="grid gap-1.5">
+              <span className={labelClass}>Allergen</span>
+              <Input
+                type="text"
+                value={newAllergy.allergenName}
+                onChange={(e) => setNewAllergy((s) => ({ ...s, allergenName: e.target.value }))}
+                placeholder="e.g., Penicillin"
+                required
+              />
+            </label>
+
+            <label className="grid gap-1.5">
+              <span className={labelClass}>Severity</span>
+              <select
+                value={newAllergy.reactionSeverity}
+                onChange={(e) => setNewAllergy((s) => ({ ...s, reactionSeverity: e.target.value as Severity }))}
+                className={selectClass}
+              >
+                <option value="Mild">Mild</option>
+                <option value="Moderate">Moderate</option>
+                <option value="Severe">Severe</option>
+              </select>
+            </label>
+
+            <label className="grid gap-1.5">
+              <span className={labelClass}>Notes</span>
+              <Input
+                type="text"
+                value={newAllergy.notes}
+                onChange={(e) => setNewAllergy((s) => ({ ...s, notes: e.target.value }))}
+                placeholder="Optional, e.g. the reaction you had"
+              />
+            </label>
+
+            <Button type="submit" className="w-full">
+              <Plus /> Add allergy
+            </Button>
+          </form>
+        </Section>
+
+        {/* List */}
+        <div className="lg:col-span-2">
+          <Section
+            title="Your allergies"
+            description={`${filtered.length} recorded`}
+            flush
+          >
+            <div className="border-b border-border p-4">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                <Input
                   type="text"
-                  value={newAllergy.allergenName}
-                  onChange={(e) => setNewAllergy((s) => ({ ...s, allergenName: e.target.value }))}
-                  className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white/70 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                  placeholder="e.g., Penicillin"
-                  required
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search by allergen, note or severity…"
+                  className="pl-9"
+                  aria-label="Search allergies"
                 />
               </div>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Severity</label>
-                <select
-                  value={newAllergy.reactionSeverity}
-                  onChange={(e) =>
-                    setNewAllergy((s) => ({ ...s, reactionSeverity: e.target.value as Severity }))
-                  }
-                  className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white/70 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                >
-                  <option value="Mild">Mild</option>
-                  <option value="Moderate">Moderate</option>
-                  <option value="Severe">Severe</option>
-                </select>
-              </div>
+            {loading ? (
+              <div className="p-5"><Loading /></div>
+            ) : filtered.length === 0 ? (
+              <Empty icon={ShieldAlert}>
+                {allergies.length === 0 ? 'No allergies yet. Add one with the form.' : 'No allergies match your search.'}
+              </Empty>
+            ) : (
+              <ul className="divide-y divide-border">
+                {filtered.map((a) => {
+                  const isEditing = editingId === a.allergyId;
+                  return (
+                    <li key={a.allergyId} className="px-5 py-4">
+                      {!isEditing ? (
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-medium text-slate-900">{a.allergenName}</p>
+                              {severityBadge(a.reactionSeverity)}
+                            </div>
+                            {a.notes && <p className="text-sm text-slate-700">{a.notes}</p>}
+                            <p className="text-xs text-muted-foreground">Added {formatDate(a.recordedAt)}</p>
+                          </div>
 
-              <div className="md:col-span-1">
-                <label className="block text-sm font-medium text-gray-700">Notes</label>
-                <input
-                  type="text"
-                  value={newAllergy.notes}
-                  onChange={(e) => setNewAllergy((s) => ({ ...s, notes: e.target.value }))}
-                  className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white/70 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                  placeholder="optional"
-                />
-              </div>
-
-              <div className="md:col-span-3 flex justify-end">
-                <button
-                  type="submit"
-                  className="inline-flex items-center rounded-xl bg-[var(--brand)]/70 px-4 py-2.5 font-medium text-gray-900 ring-1 ring-[var(--brand)]/60 transition hover:bg-[var(--brand)]/90"
-                >
-                  Add allergy
-                </button>
-              </div>
-            </form>
-          </div>
-        </details>
-      </section>
-
-      {/* Search */}
-      <div className="mt-6">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by allergen, note or severity…"
-          className="h-11 w-full rounded-xl border border-black/10 bg-white/70 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-        />
+                          <div className="flex shrink-0 gap-2">
+                            <Button size="sm" variant="outline" onClick={() => startEdit(a)}>
+                              <Pencil /> Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                              onClick={() => deleteAllergy(a.allergyId)}
+                            >
+                              <Trash2 /> Delete
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border border-border bg-slate-50/70 p-4">
+                          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                            <label className="grid gap-1.5">
+                              <span className={labelClass}>Allergen</span>
+                              <Input
+                                type="text"
+                                value={editDraft.allergenName}
+                                onChange={(e) => setEditDraft((s) => ({ ...s, allergenName: e.target.value }))}
+                              />
+                            </label>
+                            <label className="grid gap-1.5">
+                              <span className={labelClass}>Severity</span>
+                              <select
+                                value={editDraft.reactionSeverity}
+                                onChange={(e) =>
+                                  setEditDraft((s) => ({
+                                    ...s,
+                                    reactionSeverity: e.target.value as Severity,
+                                  }))
+                                }
+                                className={selectClass}
+                              >
+                                <option value="Mild">Mild</option>
+                                <option value="Moderate">Moderate</option>
+                                <option value="Severe">Severe</option>
+                              </select>
+                            </label>
+                            <label className="grid gap-1.5">
+                              <span className={labelClass}>Notes</span>
+                              <Input
+                                type="text"
+                                value={editDraft.notes}
+                                onChange={(e) => setEditDraft((s) => ({ ...s, notes: e.target.value }))}
+                              />
+                            </label>
+                          </div>
+                          <div className="mt-3 flex gap-2">
+                            <Button size="sm" onClick={() => saveEdit(a.allergyId)}>Save</Button>
+                            <Button size="sm" variant="ghost" onClick={cancelEdit}>Cancel</Button>
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Section>
+        </div>
       </div>
-
-      {/* List */}
-      <section className="mt-6 rounded-2xl border border-black/5 bg-white/80 p-5 shadow-xl backdrop-blur">
-        <h2 className="text-base font-medium text-gray-800">
-          Your allergies <span className="text-xs text-gray-500">({filtered.length})</span>
-        </h2>
-
-        {filtered.length === 0 ? (
-          <p className="py-6 text-center text-gray-500">No allergies yet.</p>
-        ) : (
-          <ul className="mt-3 divide-y divide-black/5">
-            {filtered.map((a) => {
-              const isEditing = editingId === a.allergyId;
-              return (
-                <li key={a.allergyId} className="py-4">
-                  {!isEditing ? (
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm text-gray-500">
-                          {new Date(a.recordedAt).toLocaleDateString()}
-                        </p>
-                        <p className="mt-0.5 text-base font-medium text-gray-900">
-                          {a.allergenName}{' '}
-                          <span
-                            className={[
-                              'ml-2 rounded-full px-2 py-0.5 text-xs ring-1',
-                              a.reactionSeverity === 'Severe'
-                                ? 'bg-red-100 text-red-800 ring-red-200'
-                                : a.reactionSeverity === 'Moderate'
-                                  ? 'bg-yellow-100 text-yellow-800 ring-yellow-200'
-                                  : 'bg-green-100 text-green-800 ring-green-200',
-                            ].join(' ')}
-                          >
-                            {a.reactionSeverity}
-                          </span>
-                        </p>
-                        {a.notes && <p className="text-sm text-gray-700">{a.notes}</p>}
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => startEdit(a)}
-                          className="rounded-lg bg-yellow-100 px-3 py-1.5 text-sm font-medium text-yellow-900 ring-1 ring-yellow-200 hover:bg-yellow-200"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => deleteAllergy(a.allergyId)}
-                          className="rounded-lg bg-red-100 px-3 py-1.5 text-sm font-medium text-red-900 ring-1 ring-red-200 hover:bg-red-200"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-black/10 bg-white p-4">
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Allergen</label>
-                          <input
-                            type="text"
-                            value={editDraft.allergenName}
-                            onChange={(e) =>
-                              setEditDraft((s) => ({ ...s, allergenName: e.target.value }))
-                            }
-                            className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Severity</label>
-                          <select
-                            value={editDraft.reactionSeverity}
-                            onChange={(e) =>
-                              setEditDraft((s) => ({
-                                ...s,
-                                reactionSeverity: e.target.value as Severity,
-                              }))
-                            }
-                            className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                          >
-                            <option value="Mild">Mild</option>
-                            <option value="Moderate">Moderate</option>
-                            <option value="Severe">Severe</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Notes</label>
-                          <input
-                            type="text"
-                            value={editDraft.notes}
-                            onChange={(e) => setEditDraft((s) => ({ ...s, notes: e.target.value }))}
-                            className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                          />
-                        </div>
-                      </div>
-                      <div className="mt-3 flex gap-2">
-                        <button
-                          onClick={() => saveEdit(a.allergyId)}
-                          className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={cancelEdit}
-                          className="rounded-lg bg-gray-200 px-4 py-2 text-gray-900 hover:bg-gray-300"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
     </div>
   );
 }

@@ -1,9 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { CalendarDays, Download, Search } from 'lucide-react';
 import { useAuthHooks } from '@/hooks/useAuth';
 import { get } from '@/lib/api/api';
 import { safeLocalStorage } from '@/lib/storage';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DataTable, Empty, Loading, Notice, PageHeader, Section, StatusBadge } from '@/components/dashboard/common';
 
 interface Appointment {
   appointmentId: string;
@@ -14,58 +19,51 @@ interface Appointment {
   doctorName?: string;
 }
 
-interface AppointmentsResponse {
-  data: Appointment[];
+// Shape returned by GET /appointments/ (admin list).
+interface ApiAppointment {
+  appointmentId: string;
+  scheduledDate: string;
+  scheduledTime?: string | null;
+  appointmentType?: string | null;
+  appointmentStatus?: string | null;
+  reason?: string | null;
+  status?: string | null;
+  patient?: { profile?: { firstName?: string | null; lastName?: string | null } | null } | null;
+  doctor?: { firstName?: string | null; lastName?: string | null } | null;
 }
 
-const BRAND = '#C4E1E1';
+interface AppointmentsResponse {
+  data: ApiAppointment[];
+  pagination?: { total: number | string };
+}
 
-// Demo data (used if API is empty/unavailable)
-const demoAppointments: Appointment[] = [
-  {
-    appointmentId: 'APT-001',
-    scheduledDate: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    reason: 'General check-up',
-    status: 'scheduled',
-    patientName: 'Aline Mukamana',
-    doctorName: 'Dr. Eric Niyonsaba',
-  },
-  {
-    appointmentId: 'APT-002',
-    scheduledDate: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
-    reason: 'Follow-up: blood pressure',
-    status: 'pending',
-    patientName: 'Paul Habimana',
-    doctorName: 'Dr. Grace Uwase',
-  },
-  {
-    appointmentId: 'APT-003',
-    scheduledDate: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    reason: 'Dermatology consult',
-    status: 'completed',
-    patientName: 'Eric N.',
-    doctorName: 'Dr. A. Mugisha',
-  },
-  {
-    appointmentId: 'APT-004',
-    scheduledDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    reason: 'Post-op review',
-    status: 'cancelled',
-    patientName: 'Grace U.',
-    doctorName: 'Dr. J. Rwigema',
-  },
-];
+const STATUS_OPTIONS = ['scheduled', 'confirmed', 'in_progress', 'completed', 'cancelled', 'rescheduled', 'no_show'] as const;
+type StatusFilter = 'all' | (typeof STATUS_OPTIONS)[number];
+
+const fullName = (first?: string | null, last?: string | null) => {
+  const n = `${first ?? ''} ${last ?? ''}`.trim();
+  return n || undefined;
+};
+
+const toAppointment = (a: ApiAppointment): Appointment => ({
+  appointmentId: a.appointmentId,
+  scheduledDate: a.scheduledTime ? `${a.scheduledDate}T${a.scheduledTime}` : a.scheduledDate,
+  reason: a.reason ?? (a.appointmentType ? a.appointmentType.replace(/_/g, ' ') : ''),
+  status: a.appointmentStatus ?? a.status ?? '',
+  patientName: fullName(a.patient?.profile?.firstName, a.patient?.profile?.lastName),
+  doctorName: fullName(a.doctor?.firstName, a.doctor?.lastName),
+});
 
 export default function AdminAppointmentsPage() {
   const { user } = useAuthHooks();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   // UI state
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'scheduled' | 'completed' | 'cancelled' | 'pending'>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sortBy, setSortBy] = useState<'soonest' | 'latest' | 'patient' | 'doctor'>('soonest');
 
   useEffect(() => {
@@ -81,24 +79,19 @@ export default function AdminAppointmentsPage() {
 
       setLoading(true);
       setApiError(null);
-      setNotice(null);
 
       try {
         const token = safeLocalStorage.getItem('accessToken');
         if (!token) throw new Error('No access token found. Please log in again.');
 
-        const data = await get<AppointmentsResponse>('/appointments/');
-        const list = data?.data ?? [];
-        if (Array.isArray(list) && list.length) {
-          setAppointments(list);
-        } else {
-          setAppointments(demoAppointments);
-          setNotice('Using demo appointments (API returned no data).');
-        }
+        const data = await get<AppointmentsResponse>('/appointments/', { params: { limit: 100 } });
+        const list = Array.isArray(data?.data) ? data.data : [];
+        setAppointments(list.map(toAppointment));
+        const t = Number(data?.pagination?.total);
+        setTotal(Number.isFinite(t) ? t : null);
       } catch (err: unknown) {
         console.error('Error fetching appointments:', err);
-        setAppointments(demoAppointments);
-        setNotice('API unavailable. Showing demo appointments.');
+        setAppointments([]);
         const errorMsg = err instanceof Error ? err.message : String(err);
         setApiError(errorMsg);
       } finally {
@@ -140,35 +133,25 @@ export default function AdminAppointmentsPage() {
   }, [appointments, query, statusFilter, sortBy]);
 
   const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    } catch {
-      return dateString;
-    }
-  };
-
-  const getStatusPill = (status: string) => {
-    const s = status?.toLowerCase();
-    const map: Record<string, string> = {
-      completed: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-      scheduled: 'bg-blue-50 text-blue-700 ring-blue-200',
-      cancelled: 'bg-rose-50 text-rose-700 ring-rose-200',
-      pending: 'bg-amber-50 text-amber-700 ring-amber-200',
-    };
-    return map[s] || 'bg-gray-50 text-gray-700 ring-gray-200';
+    const d = new Date(dateString);
+    if (Number.isNaN(d.getTime())) return dateString;
+    return d.toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   const exportCSV = () => {
     const rows = [
       ['Appointment ID', 'Scheduled Date', 'Reason', 'Status', 'Patient', 'Doctor'],
-      ...filtered.map(a => [
-        a.appointmentId,
-        new Date(a.scheduledDate).toISOString(),
-        a.reason,
-        a.status,
-        a.patientName ?? '',
-        a.doctorName ?? '',
-      ]),
+      ...filtered.map(a => {
+        const d = new Date(a.scheduledDate);
+        return [
+          a.appointmentId,
+          Number.isNaN(d.getTime()) ? a.scheduledDate : d.toISOString(),
+          a.reason,
+          a.status,
+          a.patientName ?? '',
+          a.doctorName ?? '',
+        ];
+      }),
     ];
     const csv = rows.map(r => r.map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -181,169 +164,125 @@ export default function AdminAppointmentsPage() {
   };
 
   if (!user) {
-    return <p className="mt-10 text-center text-gray-500">Please log in to view the appointments.</p>;
+    return <Notice tone="info">Please log in to view the appointments.</Notice>;
   }
 
-  if (loading) {
+  const header = (
+    <PageHeader
+      title="All appointments"
+      description={`Every booking on the platform${total !== null ? ` · ${total} in total` : ''}.`}
+      actions={
+        <Button type="button" variant="outline" onClick={exportCSV} disabled={loading || filtered.length === 0}>
+          <Download /> Export CSV
+        </Button>
+      }
+    />
+  );
+
+  if (apiError && !appointments.length && !loading) {
     return (
-      <div className="p-6">
-        <div className="mx-auto max-w-6xl">
-          <div className="mb-6 h-1 w-full rounded-full" style={{ background: 'linear-gradient(90deg, transparent 0%, #C4E1E1 22%, #C4E1E1 78%, transparent 100%)' }} />
-          <div className="space-y-3">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-14 w-full animate-pulse rounded-xl bg-gray-200/60" />
-            ))}
-          </div>
-        </div>
+      <div className="space-y-6">
+        {header}
+        <Notice tone="error">
+          <p className="font-medium">Appointments could not be loaded</p>
+          <p className="mt-0.5">{apiError}</p>
+        </Notice>
       </div>
     );
   }
 
-  if (apiError && !appointments.length) {
-    return (
-      <div className="mx-auto mt-12 max-w-3xl rounded-xl border border-rose-200 bg-rose-50 p-6 text-rose-700" role="alert">
-        <p className="text-sm font-medium">Error</p>
-        <p className="mt-1 text-sm">{apiError}</p>
-      </div>
-    );
-  }
+  const hasFilters = statusFilter !== 'all' || !!query;
 
   return (
-    <div
-      className="p-6"
-      style={{ '--brand': BRAND } as React.CSSProperties}
-    >
-      {/* brand ribbon */}
-      <div className="mx-auto mb-6 h-1 max-w-6xl rounded-full" style={{ background: 'linear-gradient(90deg, transparent 0%, var(--brand) 20%, var(--brand) 80%, transparent 100%)' }} aria-hidden />
+    <div className="space-y-6">
+      {header}
 
-      <div className="mx-auto max-w-6xl space-y-6">
-        {/* Header */}
-        <header className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight text-gray-900">All Appointments</h1>
-            <p className="mt-1 text-gray-600">
-              Manage all appointments, <span className="font-medium">{user.profile?.firstName} {user.profile?.lastName}</span>.
-            </p>
-            <p className="mt-2 text-xs text-gray-500">Total appointments: {appointments.length}</p>
-          </div>
+      {apiError && appointments.length > 0 && <Notice tone="error">{apiError}</Notice>}
+      {total !== null && total > appointments.length && (
+        <Notice tone="info">Showing the first {appointments.length} of {total} appointments.</Notice>
+      )}
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={exportCSV}
-              className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow hover:bg-gray-50"
-            >
-              Export CSV
-            </button>
-          </div>
-        </header>
-
-        {/* Alerts */}
-        {notice && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" role="status">
-            {notice}
-          </div>
-        )}
-        {apiError && appointments.length > 0 && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">
-            {apiError}
-          </div>
-        )}
-
+      <Section
+        flush
+        title="Appointments"
+        description={loading ? 'Loading…' : `${filtered.length} shown`}
+      >
         {/* Toolbar */}
-        <section className="rounded-2xl border border-black/5 bg-white/70 p-4 shadow-xl backdrop-blur">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="grid gap-1">
-              <span className="text-sm font-medium text-gray-700">Search</span>
-              <div className="relative">
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Find by patient, doctor, reason, or ID…"
-                  className="h-11 w-full rounded-xl border border-gray-300 bg-white pl-3 pr-3 outline-none ring-0 transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-                />
-              </div>
-            </label>
-
-            <label className="grid gap-1">
-              <span className="text-sm font-medium text-gray-700">Status</span>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'scheduled' | 'completed' | 'cancelled' | 'pending')}
-                className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 outline-none ring-0 transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-              >
-                <option value="all">All</option>
-                <option value="scheduled">Scheduled</option>
-                <option value="pending">Pending</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </label>
-
-            <label className="grid gap-1">
-              <span className="text-sm font-medium text-gray-700">Sort</span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'soonest' | 'latest' | 'patient' | 'doctor')}
-                className="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 outline-none ring-0 transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-              >
-                <option value="soonest">Soonest</option>
-                <option value="latest">Latest</option>
-                <option value="patient">Patient A–Z</option>
-                <option value="doctor">Doctor A–Z</option>
-              </select>
-            </label>
+        <div className="flex flex-col gap-3 border-b border-border px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative w-full lg:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Find by patient, doctor, reason, or ID…"
+              className="pl-9"
+              aria-label="Search appointments"
+            />
           </div>
-        </section>
-
-        {/* Table */}
-        {filtered.length === 0 ? (
-          <div className="rounded-2xl border border-black/5 bg-white/80 p-12 text-center shadow-xl backdrop-blur">
-            <p className="mb-1 text-lg font-medium text-gray-900">No appointments match your filters</p>
-            <p className="text-gray-500">Try changing the search or status filter.</p>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+              <SelectTrigger className="w-full sm:w-40" aria-label="Filter by status">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {STATUS_OPTIONS.map((s) => (
+                  <SelectItem key={s} value={s} className="capitalize">{s.replace(/_/g, ' ')}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as 'soonest' | 'latest' | 'patient' | 'doctor')}>
+              <SelectTrigger className="w-full sm:w-40" aria-label="Sort appointments">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="soonest">Soonest</SelectItem>
+                <SelectItem value="latest">Latest</SelectItem>
+                <SelectItem value="patient">Patient A–Z</SelectItem>
+                <SelectItem value="doctor">Doctor A–Z</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+        </div>
+
+        {loading ? (
+          <div className="px-5 py-3"><Loading rows={6} /></div>
+        ) : filtered.length === 0 ? (
+          <Empty
+            icon={CalendarDays}
+            action={hasFilters ? (
+              <Button variant="outline" size="sm" onClick={() => { setQuery(''); setStatusFilter('all'); }}>Reset filters</Button>
+            ) : undefined}
+          >
+            {hasFilters ? 'No appointments match your filters. Try changing the search or status filter.' : 'No appointments yet.'}
+          </Empty>
         ) : (
-          <section className="overflow-hidden rounded-2xl border border-black/5 bg-white/80 shadow-xl backdrop-blur">
-            <div className="max-h-[65vh] overflow-auto">
-              <table className="w-full text-left">
-                <thead className="sticky top-0 z-10 bg-gray-50/80 backdrop-blur">
-                  <tr className="[&>th]:px-4 [&>th]:py-3">
-                    <th className="text-gray-700">Appointment</th>
-                    <th className="text-gray-700">Patient</th>
-                    <th className="text-gray-700">Doctor</th>
-                    <th className="text-gray-700">Status</th>
-                    <th className="text-gray-700">Reason</th>
-                    <th className="text-gray-700">ID</th>
-                  </tr>
-                </thead>
-                <tbody className="[&>tr]:border-t [&>tr]:border-black/5">
-                  {filtered.map((a, idx) => (
-                    <tr
-                      key={a.appointmentId}
-                      className={`transition-colors hover:bg-[var(--brand)]/10 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
-                    >
-                      <td className="px-4 py-3 whitespace-nowrap font-medium">
-                        {formatDate(a.scheduledDate)}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">{a.patientName ?? '—'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">{a.doctorName ?? '—'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs ring-1 ${getStatusPill(a.status || 'pending')}`}>
-                          {a.status || 'pending'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 max-w-[320px] truncate" title={a.reason}>
-                        {a.reason}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">{a.appointmentId}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <DataTable>
+            <thead>
+              <tr>
+                <th>Scheduled</th>
+                <th>Patient</th>
+                <th>Doctor</th>
+                <th>Status</th>
+                <th>Reason</th>
+                <th>ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((a) => (
+                <tr key={a.appointmentId}>
+                  <td className="whitespace-nowrap font-medium text-slate-900">{formatDate(a.scheduledDate)}</td>
+                  <td className="whitespace-nowrap text-slate-700">{a.patientName ?? '—'}</td>
+                  <td className="whitespace-nowrap text-slate-700">{a.doctorName ?? '—'}</td>
+                  <td className="whitespace-nowrap"><StatusBadge value={a.status || 'pending'} /></td>
+                  <td className="max-w-[320px] truncate capitalize text-slate-700" title={a.reason}>{a.reason || '—'}</td>
+                  <td className="whitespace-nowrap font-mono text-xs text-muted-foreground" title={a.appointmentId}>{a.appointmentId.slice(0, 8)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </DataTable>
         )}
-      </div>
+      </Section>
     </div>
   );
 }

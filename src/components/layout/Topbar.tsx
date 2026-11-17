@@ -1,114 +1,77 @@
 'use client';
 
-import { useAuthHooks } from '@/hooks/useAuth';
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useMemo } from 'react';
+import { LogOut, Menu, UserRound, ChevronDown } from 'lucide-react';
+import { useAuthHooks } from '@/hooks/useAuth';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { NAV, activeItem } from './nav';
 
-export default function Topbar() {
+export default function Topbar({ onMenu }: { onMenu?: () => void }) {
   const { user, handleLogout } = useAuthHooks();
+  const pathname = usePathname();
+  const role = user?.userType === 'super_admin' ? 'admin' : user?.userType ?? '';
+  const title = activeItem(NAV[role] ?? [], pathname)?.name ?? 'IsanoMed';
 
-  const BRAND = '#C4E1E1';
-  const initials = useMemo(() => {
-    const f = user?.profile?.firstName?.[0] ?? '';
-    const l = user?.profile?.lastName?.[0] ?? '';
-    return (f + l).toUpperCase() || '🙂';
-  }, [user]);
+  const name = `${user?.profile?.firstName ?? ''} ${user?.profile?.lastName ?? ''}`.trim();
+  const initials = useMemo(
+    () => ((user?.profile?.firstName?.[0] ?? '') + (user?.profile?.lastName?.[0] ?? '')).toUpperCase() || 'U',
+    [user],
+  );
 
   return (
-    <header
-      className="sticky top-0 z-40 border-b bg-white/70 backdrop-blur-xl"
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      style={{ ['--brand' as any]: BRAND } as React.CSSProperties}
-    >
-      {/* brand ribbon */}
-      <div
-        className="h-1 w-full"
-        style={{
-          background:
-            'linear-gradient(90deg, rgba(196,225,225,0) 0%, rgba(196,225,225,0.9) 20%, rgba(196,225,225,0.9) 80%, rgba(196,225,225,0) 100%)',
-        }}
-      />
+    <header className="sticky top-0 z-40 border-b border-border bg-white/80 backdrop-blur-lg supports-[backdrop-filter]:bg-white/70">
+      <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
+        <button
+          onClick={onMenu}
+          className="-ml-1 rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
+          aria-label="Open menu"
+        >
+          <Menu className="size-5" />
+        </button>
 
-      <div className="mx-auto max-w-full px-4">
-        <div className="flex h-16 items-center justify-between">
-          {/* left: logo + name */}
-          <div className="flex items-center gap-3">
-            <div
-              className="grid h-10 w-10 place-items-center rounded-xl ring-1 ring-black/5 shadow-sm"
-              style={{ background: 'var(--brand)' }}
-              aria-hidden
-            >
-              {/* heartbeat glyph */}
-              <svg viewBox="0 0 24 24" className="h-5 w-5 text-black/70">
-                <path
-                  d="M3 12h3l2-4 3 8 2-5h6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-            <div className="flex flex-col">
-              <h1 className="text-lg font-semibold tracking-tight text-gray-900">
-                IsanoMed
-              </h1>
-              <span className="hidden text-xs text-gray-500 sm:inline">
-                Your health, connected
-              </span>
-            </div>
-          </div>
+        <h1 className="truncate text-base font-semibold text-slate-900 sm:text-lg">{title}</h1>
 
-          {/* right: user info + logout */}
-          {user && (
-            <div className="flex items-center gap-3">
-              <div className="hidden items-center gap-2 rounded-full border border-black/5 bg-white/60 px-3 py-1.5 md:flex">
-                <span className="text-sm text-gray-700">
-                  Welcome,&nbsp;
-                  <span className="font-medium text-gray-900">
-                    {user.profile?.firstName} {user.profile?.lastName}
-                  </span>
+        {user ? (
+          <div className="ml-auto flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-2 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <span className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-semibold text-white">
+                  {initials}
                 </span>
-                {user.userType && (
-                  <span className="rounded-full bg-[var(--brand)]/30 px-2 py-0.5 text-xs font-medium text-gray-800 ring-1 ring-[var(--brand)]/50">
-                    {user.userType}
-                  </span>
-                )}
-              </div>
-
-              {/* avatar */}
-              <div
-                className="grid h-10 w-10 select-none place-items-center rounded-full bg-white text-sm font-semibold text-gray-800 ring-1 ring-black/5 shadow-sm"
-                aria-label="User avatar"
-                title={`${user.profile?.firstName || ''} ${user.profile?.lastName || ''}`}
-              >
-                {initials}
-              </div>
-
-              <button
-                onClick={handleLogout}
-                className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand)]/50 px-3.5 py-2 text-sm font-medium text-gray-900 ring-1 ring-[var(--brand)]/60 transition hover:bg-[var(--brand)]/70 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
-                aria-label="Logout"
-              >
-                <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-                  <path
-                    d="M10 17l5-5-5-5M15 12H3M21 3v18"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                Logout
-              </button>
-            </div>
-          )}
-        </div>
+                <span className="hidden text-left leading-tight sm:block">
+                  <span className="block text-sm font-medium text-slate-900">{name || user.email}</span>
+                  <span className="block text-xs capitalize text-muted-foreground">{user.userType?.replace('_', ' ')}</span>
+                </span>
+                <ChevronDown className="hidden size-4 text-slate-400 sm:block" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="font-normal">
+                  <p className="text-sm font-medium text-slate-900">{name || 'Signed in'}</p>
+                  <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href={`/${role}/profile`.replace('/sponsor/profile', '/sponsor')}>
+                    <UserRound className="size-4" /> Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleLogout} className="text-rose-600 focus:text-rose-600">
+                  <LogOut className="size-4" /> Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : null}
       </div>
-
-      {/* soft divider */}
-      <div className="h-px w-full bg-gradient-to-r from-transparent via-black/10 to-transparent" />
     </header>
   );
 }

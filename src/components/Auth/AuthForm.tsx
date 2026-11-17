@@ -33,8 +33,6 @@ const registerSchema = z.object({
 });
 
 export function AuthForm({ type }: AuthFormProps) {
-  const BRAND = '#C4E1E1';
-
   const { handleAuth, loading, error } = useAuthHooks();
   const schema = type === 'login' ? loginSchema : registerSchema;
 
@@ -52,123 +50,64 @@ export function AuthForm({ type }: AuthFormProps) {
   };
 
   return (
-    <div
-      className="mx-auto w-full max-w-md rounded-2xl border border-black/5 bg-white/80 p-6 shadow-xl backdrop-blur"
-      style={{ ['--brand' as any]: BRAND } as React.CSSProperties}
-    >
-      {/* header */}
-      <div className="mb-6 flex items-center gap-3">
-        <div
-          className="grid h-10 w-10 place-items-center rounded-lg"
-          style={{ background: 'var(--brand)' }}
-          aria-hidden
-        >
-          <svg viewBox="0 0 24 24" className="h-5 w-5 text-black/70">
-            <path
-              d="M3 12h3l2-4 3 8 2-5h6"
-              stroke="currentColor"
-              strokeWidth="2"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </div>
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight text-gray-900">
-            {type === 'login' ? 'Welcome back' : 'Create your account'}
-          </h2>
-          <p className="text-xs text-gray-600">
-            {type === 'login'
-              ? 'Use your credentials to sign in.'
-              : 'Fill in your details to register.'}
-          </p>
-        </div>
-      </div>
-
-      {/* subtle divider */}
-      <div className="mb-6 h-px w-full bg-gradient-to-r from-transparent via-black/10 to-transparent" />
-
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
-        {type === 'register' && (
-          <>
-            {/* put names side-by-side on larger screens (visual only) */}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <InputField
-                label="First Name"
-                name="firstName"
-                type="text"
-                register={register}
-                error={errors.firstName as any}
-                required
-              />
-              <InputField
-                label="Last Name"
-                name="lastName"
-                type="text"
-                register={register}
-                error={errors.lastName as any}
-                required
-              />
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+      {type === 'register' && (
+        <>
+          <fieldset>
+            <legend className="mb-2 text-sm font-medium text-slate-700">I am joining as</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { value: 'patient', title: 'Patient', text: 'I want care for myself' },
+                { value: 'sponsor', title: 'Sponsor', text: 'I pay for a relative' },
+              ].map((option) => (
+                <label
+                  key={option.value}
+                  className="cursor-pointer rounded-xl border border-input bg-white p-3 transition hover:border-brand-300 has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50 has-[:checked]:ring-2 has-[:checked]:ring-brand-500/20"
+                >
+                  <input type="radio" value={option.value} {...register('userType')} className="sr-only" />
+                  <span className="block text-sm font-semibold text-slate-900">{option.title}</span>
+                  <span className="block text-xs text-slate-500">{option.text}</span>
+                </label>
+              ))}
             </div>
+            {errors.userType && <p className="mt-1.5 text-xs text-rose-600">{(errors.userType as any).message}</p>}
+          </fieldset>
 
-            <InputField
-              label="Phone Number"
-              name="phoneNumber"
-              type="tel"
-              register={register}
-              error={errors.phoneNumber as any}
-              required
-            />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <InputField label="First name" name="firstName" type="text" autoComplete="given-name" register={register} error={errors.firstName as any} required />
+            <InputField label="Last name" name="lastName" type="text" autoComplete="family-name" register={register} error={errors.lastName as any} required />
+          </div>
 
-            <fieldset className="space-y-2">
-              <legend className="text-sm font-medium text-gray-700">I am registering as</legend>
-              <label className="flex items-center gap-2 text-sm text-gray-800">
-                <input type="radio" value="patient" {...register('userType')} /> A patient receiving care
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-800">
-                <input type="radio" value="sponsor" {...register('userType')} /> A sponsor paying for a relative&apos;s care
-              </label>
-              {errors.userType && <p className="text-sm text-red-600">{(errors.userType as any).message}</p>}
-            </fieldset>
-          </>
-        )}
+          <InputField label="Phone number" name="phoneNumber" type="tel" autoComplete="tel" placeholder="+2507XXXXXXXX" register={register} error={errors.phoneNumber as any} required />
+        </>
+      )}
 
-        <InputField
-          label="Email"
-          name="email"
-          type="email"
-          register={register}
-          error={errors.email as any}
-          required
-        />
+      <InputField label="Email" name="email" type="email" autoComplete="email" placeholder="you@example.com" register={register} error={errors.email as any} required />
 
-        <InputField
-          label="Password"
-          name="password"
-          type="password"
-          register={register}
-          error={errors.password as any}
-          required
-        />
+      <InputField
+        label="Password"
+        name="password"
+        type="password"
+        autoComplete={type === 'login' ? 'current-password' : 'new-password'}
+        register={register}
+        error={errors.password as any}
+        required
+      />
 
-        {error && (
-          <p className="mt-1 text-sm text-red-600">{error}</p>
-        )}
+      {error && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700" role="alert">
+          {error}
+        </div>
+      )}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className={[
-            'mt-2 inline-flex w-full items-center justify-center rounded-xl px-4 py-2.5 text-sm font-medium',
-            'text-gray-900 ring-1 transition focus:outline-none focus-visible:ring-2',
-            'bg-[var(--brand)]/70 ring-[var(--brand)]/60 hover:bg-[var(--brand)]/90',
-            'disabled:cursor-not-allowed disabled:opacity-60',
-          ].join(' ')}
-        >
-          {loading ? 'Loading...' : type === 'login' ? 'Login' : 'Register'}
-        </button>
-      </form>
-    </div>
+      <button
+        type="submit"
+        disabled={loading}
+        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-ring/25 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {loading ? <span className="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden /> : null}
+        {loading ? 'Please wait…' : type === 'login' ? 'Sign in' : 'Create account'}
+      </button>
+    </form>
   );
 }

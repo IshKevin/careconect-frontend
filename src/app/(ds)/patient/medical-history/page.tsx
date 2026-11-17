@@ -1,8 +1,17 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { Activity, CheckCircle2, ClipboardList, FileHeart, Paperclip, Pill, Search, ShieldAlert } from 'lucide-react';
 import { useAuthHooks } from '@/hooks/useAuth';
 import api from '@/lib/api/api';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/input';
+import { Empty, Loading, Notice, PageHeader, Section, StatCard, StatusBadge, formatDate } from '@/components/dashboard/common';
+import { cn } from '@/lib/utils';
+
+const selectClass =
+  'h-10 rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20';
 
 type HistoryItem = {
   historyId: string;
@@ -79,203 +88,149 @@ export default function MedicalHistoryPage() {
 
   if (!user) return null;
 
-  const BRAND = '#C4E1E1';
-  const formatDate = (d?: string) => (d ? new Date(d).toLocaleDateString() : '—');
-
-  const statusChip = (s?: string) => {
-    const val = (s ?? '').toLowerCase();
-    const map: Record<string, string> = {
-      active: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-      resolved: 'bg-gray-100 text-gray-700 ring-gray-200',
-      ongoing: 'bg-amber-50 text-amber-700 ring-amber-200',
-    };
-    const cls = map[val] ?? 'bg-sky-50 text-sky-700 ring-sky-200';
-    return <span className={`rounded-full px-2 py-0.5 text-xs ring-1 capitalize ${cls}`}>{s ?? 'unknown'}</span>;
-  };
+  const countBy = (s: string) => history.filter(i => (i.status ?? '').toLowerCase() === s).length;
 
   const severityDot = (sev?: string) => {
     const v = (sev ?? '').toLowerCase();
     const c =
       v === 'severe' ? 'bg-rose-500' :
         v === 'moderate' ? 'bg-amber-500' :
-          v === 'mild' ? 'bg-emerald-500' : 'bg-gray-300';
+          v === 'mild' ? 'bg-emerald-500' : 'bg-slate-300';
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-gray-600">
-        <span className={`h-2 w-2 rounded-full ${c}`} /> {sev ?? '—'}
+      <span className="inline-flex items-center gap-1.5 text-xs capitalize text-slate-600">
+        <span className={cn('size-2 rounded-full', c)} /> {sev ?? '—'}
       </span>
     );
   };
 
   return (
-    <div
-      className="p-6"
-      style={{ '--brand': BRAND } as React.CSSProperties}
-    >
-      {/* Brand ribbon */}
-      <div
-        className="mx-auto mb-6 h-1 max-w-6xl rounded-full"
-        style={{ background: 'linear-gradient(90deg, transparent 0%, var(--brand) 20%, var(--brand) 80%, transparent 100%)' }}
-        aria-hidden
+    <div className="space-y-6">
+      <PageHeader
+        title="Medical history"
+        description="Conditions recorded by your care team, with onset and resolution dates."
+        actions={
+          <>
+            <Button variant="outline" asChild>
+              <Link href="/patient/allergies"><ShieldAlert /> Allergies</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/patient/medications"><Pill /> Medications</Link>
+            </Button>
+          </>
+        }
       />
 
-      <div className="mx-auto max-w-6xl space-y-6">
-        {/* Header */}
-        <header>
-          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Medical History</h1>
-          <p className="mt-1 text-gray-600">
-            Manage your medical history, <span className="font-medium">{user.profile?.firstName} {user.profile?.lastName}</span>.
-          </p>
-        </header>
+      {error && <Notice tone="error">{error}</Notice>}
 
-        {/* Alerts */}
-        {loading && (
-          <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sky-800">Loading…</div>
-        )}
-        {error && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">{error}</div>
-        )}
-
-        {/* Toolbar */}
-        <section className="rounded-2xl border border-black/5 bg-white/70 p-4 shadow-xl backdrop-blur">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="relative w-full md:max-w-md">
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search conditions or notes…"
-                className="h-11 w-full rounded-xl border border-black/10 bg-white px-3 outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'resolved' | 'ongoing')}
-                className="h-11 rounded-xl border border-black/10 bg-white px-3 text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-              >
-                <option value="all">All status</option>
-                <option value="active">Active</option>
-                <option value="ongoing">Ongoing</option>
-                <option value="resolved">Resolved</option>
-              </select>
-
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'newest' | 'oldest' | 'name')}
-                className="h-11 rounded-xl border border-black/10 bg-white px-3 text-sm outline-none focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-              >
-                <option value="newest">Newest first</option>
-                <option value="oldest">Oldest first</option>
-                <option value="name">Name A–Z</option>
-              </select>
-
-              {(q || statusFilter !== 'all' || sortBy !== 'newest') && (
-                <button
-                  onClick={() => { setQ(''); setStatusFilter('all'); setSortBy('newest'); }}
-                  className="h-11 rounded-xl border border-black/10 bg-white px-4 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  Reset
-                </button>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* List */}
-        <section className="rounded-2xl border border-black/5 bg-white/80 p-5 shadow-xl backdrop-blur">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-gray-900">History</h2>
-            <p className="text-xs text-gray-500">Showing {filtered.length} record{filtered.length === 1 ? '' : 's'}</p>
-          </div>
-
-          {/* Loading skeleton */}
-          {loading && (
-            <div className="space-y-3">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="rounded-xl border border-black/5 bg-white/70 p-4">
-                  <div className="mb-2 h-4 w-40 animate-pulse rounded bg-gray-200/70" />
-                  <div className="h-4 w-72 animate-pulse rounded bg-gray-200/70" />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!loading && filtered.length === 0 ? (
-            <div className="rounded-xl border border-black/5 bg-white/70 p-8 text-center text-gray-600">
-              No medical history found.
-            </div>
-          ) : null}
-
-          {!loading && filtered.length > 0 && (
-            <ul className="space-y-3">
-              {filtered.map((item) => (
-                <li key={item.historyId} className="rounded-xl border border-black/5 bg-white p-4">
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-base font-semibold text-gray-900">{item.conditionName}</h3>
-                        {statusChip(item.status)}
-                      </div>
-                      <p className="mt-0.5 text-sm text-gray-600">
-                        <span className="font-medium">Onset:</span> {formatDate(item.onsetDate)}
-                        {item.resolutionDate && (
-                          <>
-                            {' '}• <span className="font-medium">Resolved:</span> {formatDate(item.resolutionDate)}
-                          </>
-                        )}
-                      </p>
-                      {(item.severity || item.notes) && (
-                        <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-gray-700">
-                          {severityDot(item.severity)}
-                          {item.notes && (
-                            <span className="line-clamp-2 max-w-prose">
-                              <span className="font-medium text-gray-600">Notes:</span> {item.notes}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* meta */}
-                    <div className="mt-1 flex items-center gap-3 md:mt-0">
-                      <span className="rounded-lg bg-[var(--brand)]/30 px-2 py-1 text-xs text-gray-800 ring-1 ring-[var(--brand)]/40">
-                        ID: {item.historyId.slice(0, 8)}…
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* attachments (optional) */}
-                  {Array.isArray(item.attachments) && item.attachments.length > 0 && (
-                    <div className="mt-3 rounded-lg bg-gray-50 p-3">
-                      <p className="mb-2 text-xs font-medium text-gray-600">Attachments</p>
-                      <div className="flex flex-wrap gap-2">
-                        {item.attachments.map((a, idx) => (
-                          <a
-                            key={idx}
-                            href={a.url || '#'}
-                            target={a.url ? '_blank' : undefined}
-                            className="inline-flex items-center rounded-lg border border-black/10 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                            onClick={(e) => { if (!a.url) e.preventDefault(); }}
-                          >
-                            {a.name || `File ${idx + 1}`}
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* (Optional) Placeholder for create form — keep backend unchanged */}
-        {/* You can wire this later to POST /patient/medical-history */}
-        {/* <section className="rounded-2xl border border-black/5 bg-white/80 p-5 shadow-xl backdrop-blur">
-          <h2 className="text-base font-semibold text-gray-900">Add new record</h2>
-          <p className="mt-1 text-sm text-gray-600">Coming soon</p>
-        </section> */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Records" value={loading ? '—' : history.length} icon={ClipboardList} />
+        <StatCard label="Active" value={loading ? '—' : countBy('active')} icon={Activity} tone="green" />
+        <StatCard label="Ongoing" value={loading ? '—' : countBy('ongoing')} icon={FileHeart} tone="amber" />
+        <StatCard label="Resolved" value={loading ? '—' : countBy('resolved')} icon={CheckCircle2} tone="gray" />
       </div>
+
+      <Section
+        title="History"
+        description={`Showing ${filtered.length} record${filtered.length === 1 ? '' : 's'}`}
+        flush
+      >
+        {/* Toolbar */}
+        <div className="flex flex-col gap-3 border-b border-border p-4 md:flex-row md:items-center md:justify-between">
+          <div className="relative w-full md:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search conditions or notes…"
+              className="pl-9"
+              aria-label="Search conditions or notes"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'resolved' | 'ongoing')}
+              className={selectClass}
+              aria-label="Filter by status"
+            >
+              <option value="all">All status</option>
+              <option value="active">Active</option>
+              <option value="ongoing">Ongoing</option>
+              <option value="resolved">Resolved</option>
+            </select>
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'newest' | 'oldest' | 'name')}
+              className={selectClass}
+              aria-label="Sort"
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="name">Name A–Z</option>
+            </select>
+
+            {(q || statusFilter !== 'all' || sortBy !== 'newest') && (
+              <Button
+                variant="ghost"
+                className="col-span-2 sm:col-span-1"
+                onClick={() => { setQ(''); setStatusFilter('all'); setSortBy('newest'); }}
+              >
+                Reset
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="p-5"><Loading rows={4} /></div>
+        ) : filtered.length === 0 ? (
+          <Empty icon={FileHeart}>
+            {history.length === 0
+              ? 'No medical history found. Conditions your doctor records will appear here.'
+              : 'No records match your search.'}
+          </Empty>
+        ) : (
+          <ul className="divide-y divide-border">
+            {filtered.map((item) => (
+              <li key={item.historyId} className="space-y-2 px-5 py-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold text-slate-900">{item.conditionName}</h3>
+                  <StatusBadge value={item.status ?? 'unknown'} />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Onset {formatDate(item.onsetDate)}
+                  {item.resolutionDate && <> · Resolved {formatDate(item.resolutionDate)}</>}
+                </p>
+                {(item.severity || item.notes) && (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-700">
+                    {severityDot(item.severity)}
+                    {item.notes && <span className="line-clamp-2 max-w-prose">{item.notes}</span>}
+                  </div>
+                )}
+
+                {Array.isArray(item.attachments) && item.attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {item.attachments.map((a, idx) => (
+                      <a
+                        key={idx}
+                        href={a.url || '#'}
+                        target={a.url ? '_blank' : undefined}
+                        rel={a.url ? 'noopener noreferrer' : undefined}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                        onClick={(e) => { if (!a.url) e.preventDefault(); }}
+                      >
+                        <Paperclip className="size-3.5" /> {a.name || `File ${idx + 1}`}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
     </div>
   );
 }

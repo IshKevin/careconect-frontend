@@ -5,13 +5,19 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Empty, Loading, Notice, Section, StatusBadge, errorText, formatRwf } from '@/components/dashboard/common';
+import { Building2, X } from 'lucide-react';
+import { cn } from "@/lib/utils";
+import { DataTable, Empty, Loading, Notice, PageHeader, Section, StatCard, StatusBadge, errorText, formatRwf } from '@/components/dashboard/common';
 import { useCreateFacility, useFacilities, useFacilitySettlement, useUpdateFacility } from '@/hooks/useDashboards';
 import type { FacilityType, VerificationStatus } from '@/types/admin-ops';
 
 const TYPES: FacilityType[] = ['hospital', 'clinic', 'private_practice', 'health_center'];
 const STATUSES: VerificationStatus[] = ['pending', 'verified', 'rejected', 'suspended'];
+
+// Native select styled like the ui Input.
+const NATIVE_SELECT =
+  'h-10 w-full rounded-lg border border-input bg-card px-3 text-sm capitalize shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20 disabled:opacity-50';
+const LABEL = 'text-sm font-medium text-slate-700';
 
 const emptyForm = { name: '', facilityType: 'clinic' as FacilityType, registrationNumber: '', district: '', contactEmail: '', contactPhone: '' };
 
@@ -52,124 +58,139 @@ export default function AdminFacilitiesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Facilities</h1>
-        <p className="text-sm text-gray-600">Verify a facility before assigning doctors. Settlement is calculated per facility.</p>
-      </div>
+      <PageHeader
+        title="Facilities"
+        description="Verify a facility before assigning doctors. Settlement is calculated per facility."
+      />
 
-      <Section title="Register a facility">
+      <Section title="Register a facility" description="New facilities start as pending until verified.">
         <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="space-y-1">
-            <Label htmlFor="f-name">Name</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="f-name" className={LABEL}>Name</Label>
             <Input id="f-name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="f-type">Type</Label>
-            <select id="f-type" value={form.facilityType} onChange={(e) => setForm({ ...form, facilityType: e.target.value as FacilityType })} className="h-9 w-full rounded-md border bg-white px-3 text-sm">
+          <div className="space-y-1.5">
+            <Label htmlFor="f-type" className={LABEL}>Type</Label>
+            <select id="f-type" value={form.facilityType} onChange={(e) => setForm({ ...form, facilityType: e.target.value as FacilityType })} className={NATIVE_SELECT}>
               {TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
             </select>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="f-reg">Registration number</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="f-reg" className={LABEL}>Registration number</Label>
             <Input id="f-reg" required value={form.registrationNumber} onChange={(e) => setForm({ ...form, registrationNumber: e.target.value })} />
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="f-district">District</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="f-district" className={LABEL}>District</Label>
             <Input id="f-district" value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} />
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="f-email">Contact email</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="f-email" className={LABEL}>Contact email</Label>
             <Input id="f-email" type="email" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} />
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="f-phone">Contact phone</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="f-phone" className={LABEL}>Contact phone</Label>
             <Input id="f-phone" value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} />
           </div>
-          <div className="sm:col-span-2 lg:col-span-3">
-            <Button type="submit" disabled={create.isPending}>{create.isPending ? 'Saving…' : 'Register facility'}</Button>
+          <div className="flex justify-end sm:col-span-2 lg:col-span-3">
+            <Button className="w-full sm:w-auto" type="submit" disabled={create.isPending}>{create.isPending ? 'Saving…' : 'Register facility'}</Button>
           </div>
         </form>
       </Section>
 
-      <Section title="All facilities">
+      <Section flush title="All facilities" description={facilities ? `${facilities.length} registered` : undefined}>
         {isLoading ? (
-          <Loading />
+          <div className="px-5 py-3"><Loading /></div>
         ) : error ? (
-          <Notice tone="error">{errorText(error, 'Facilities could not be loaded.')}</Notice>
+          <div className="p-5"><Notice tone="error">{errorText(error, 'Facilities could not be loaded.')}</Notice></div>
         ) : !facilities || facilities.length === 0 ? (
-          <Empty>No facilities yet.</Empty>
+          <Empty icon={Building2}>No facilities yet.</Empty>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Reg. no.</TableHead>
-                  <TableHead className="text-right">Doctors</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Change status</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {facilities.map((f) => (
-                  <TableRow key={f.facilityId}>
-                    <TableCell className="font-medium">{f.name}</TableCell>
-                    <TableCell className="capitalize">{f.facilityType.replace(/_/g, ' ')}</TableCell>
-                    <TableCell>{f.registrationNumber}</TableCell>
-                    <TableCell className="text-right">{f.doctorCount}</TableCell>
-                    <TableCell><StatusBadge value={f.verificationStatus} /></TableCell>
-                    <TableCell>
-                      <select
-                        aria-label={`Status for ${f.name}`}
-                        value={f.verificationStatus}
-                        disabled={update.isPending}
-                        onChange={(e) => setStatus(f.facilityId, e.target.value as VerificationStatus)}
-                        className="h-8 rounded-md border bg-white px-2 text-sm"
-                      >
-                        {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="outline" size="sm" onClick={() => setSelected(f.facilityId)}>Settlement</Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <DataTable>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Reg. no.</th>
+                <th className="text-right">Doctors</th>
+                <th>Status</th>
+                <th>Change status</th>
+                <th><span className="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {facilities.map((f) => (
+                <tr key={f.facilityId} className={selected === f.facilityId ? 'bg-brand-50/60' : undefined}>
+                  <td className="whitespace-nowrap font-medium text-slate-900">{f.name}</td>
+                  <td className="whitespace-nowrap capitalize text-slate-700">{f.facilityType.replace(/_/g, ' ')}</td>
+                  <td className="whitespace-nowrap text-slate-700">{f.registrationNumber}</td>
+                  <td className="text-right tabular-nums text-slate-700">{f.doctorCount}</td>
+                  <td className="whitespace-nowrap"><StatusBadge value={f.verificationStatus} /></td>
+                  <td>
+                    <select
+                      aria-label={`Status for ${f.name}`}
+                      value={f.verificationStatus}
+                      disabled={update.isPending}
+                      onChange={(e) => setStatus(f.facilityId, e.target.value as VerificationStatus)}
+                      className={cn(NATIVE_SELECT, "h-8 min-w-34")}
+                    >
+                      {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </td>
+                  <td className="text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelected(f.facilityId);
+                        setTimeout(() => document.getElementById('facility-settlement')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+                      }}
+                    >
+                      Settlement
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </DataTable>
         )}
       </Section>
 
       {selected ? (
-        <Section title="Settlement" action={<Button variant="ghost" size="sm" onClick={() => setSelected(null)}>Close</Button>}>
+        <div id="facility-settlement" className="scroll-mt-20">
+        <Section
+          title="Settlement"
+          description={settlement.data ? `${settlement.data.facility.name} · ${settlement.data.invoicedCount} invoices` : undefined}
+          action={<Button variant="ghost" size="sm" onClick={() => setSelected(null)}><X /> Close</Button>}
+        >
           {settlement.isLoading ? (
             <Loading />
           ) : settlement.error || !settlement.data ? (
             <Notice tone="error">{errorText(settlement.error, 'Settlement could not be loaded.')}</Notice>
           ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-gray-700">{settlement.data.facility.name} · {settlement.data.invoicedCount} invoices</p>
-              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                <div><p className="text-xs text-gray-500">Paid (gross)</p><p className="font-semibold">{formatRwf(settlement.data.paidGross)}</p></div>
-                <div><p className="text-xs text-gray-500">Refunded</p><p className="font-semibold">{formatRwf(settlement.data.refunded)}</p></div>
-                <div><p className="text-xs text-gray-500">Net settlable</p><p className="font-semibold">{formatRwf(settlement.data.netSettlable)}</p></div>
-                <div><p className="text-xs text-gray-500">Awaiting payment</p><p className="font-semibold">{formatRwf(settlement.data.pendingInvoices)}</p></div>
+            <div className="space-y-5">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <StatCard label="Paid (gross)" value={formatRwf(settlement.data.paidGross)} tone="green" />
+                <StatCard label="Refunded" value={formatRwf(settlement.data.refunded)} tone="violet" />
+                <StatCard label="Net settlable" value={formatRwf(settlement.data.netSettlable)} tone="blue" />
+                <StatCard label="Awaiting payment" value={formatRwf(settlement.data.pendingInvoices)} tone="amber" />
               </div>
               {settlement.data.byDoctor.length > 0 ? (
-                <ul className="divide-y text-sm">
-                  {settlement.data.byDoctor.map((d) => (
-                    <li key={d.doctorId} className="flex justify-between py-2">
-                      <span className="font-mono text-xs text-gray-600">Doctor {d.doctorId.slice(0, 8)}</span>
-                      <span>Net {formatRwf(d.net)}</span>
-                    </li>
-                  ))}
-                </ul>
+                <div>
+                  <h4 className="mb-2 text-sm font-medium text-slate-700">By doctor</h4>
+                  <ul className="divide-y divide-border rounded-xl border border-border text-sm">
+                    {settlement.data.byDoctor.map((d) => (
+                      <li key={d.doctorId} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                        <span className="font-mono text-xs text-muted-foreground">Doctor {d.doctorId.slice(0, 8)}</span>
+                        <span className="tabular-nums text-slate-900">Net {formatRwf(d.net)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : null}
             </div>
           )}
         </Section>
+        </div>
       ) : null}
     </div>
   );

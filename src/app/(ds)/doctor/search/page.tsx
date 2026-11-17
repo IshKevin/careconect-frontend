@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useAuthHooks } from '@/hooks/useAuth';
 import api from '@/lib/api/api';
-import { Search, Users, ShieldCheck, AlertCircle } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/Card';
+import { Search, Users } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/Button';
+import { Empty, Loading, Notice, PageHeader } from '@/components/dashboard/common';
 
 interface Patient {
   userId: string;
@@ -15,8 +16,6 @@ interface Patient {
     lastName: string;
   };
 }
-
-const BRAND = '#C4E1E1';
 
 export default function SearchPatientsPage() {
   const { user } = useAuthHooks();
@@ -44,17 +43,7 @@ export default function SearchPatientsPage() {
   }, []);
 
   if (!user || user.userType !== 'doctor') {
-    return (
-      <div className="flex min-h-[400px] flex-col items-center justify-center gap-4 text-center">
-        <div className="rounded-full bg-rose-50 p-3 ring-8 ring-rose-50/50">
-          <AlertCircle className="h-8 w-8 text-rose-500" />
-        </div>
-        <div>
-          <h3 className="text-xl font-bold text-gray-900">Access Denied</h3>
-          <p className="text-gray-500">Please log in as a doctor to search patients.</p>
-        </div>
-      </div>
-    );
+    return <Notice tone="warning">Please log in as a doctor to search patients.</Notice>;
   }
 
   const filtered = patients.filter(p => {
@@ -63,60 +52,63 @@ export default function SearchPatientsPage() {
   });
 
   return (
-    <div className="p-6" style={{ '--brand': BRAND } as React.CSSProperties}>
-      <div className="mx-auto mb-6 h-1 max-w-5xl rounded-full" style={{ background: 'linear-gradient(90deg, transparent 0%, var(--brand) 20%, var(--brand) 80%, transparent 100%)' }} aria-hidden />
+    <div className="space-y-6">
+      <PageHeader title="Patient directory" description="Find a patient in your care by name or email." />
 
-      <div className="mx-auto max-w-5xl space-y-6">
-        <header>
-          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">Patient Directory</h1>
-          <p className="mt-1 text-gray-600">Search for patients in your network.</p>
-        </header>
-
-        <section className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name or email…"
-            className="h-12 w-full rounded-2xl border-black/10 pl-10 shadow-sm focus-visible:ring-[var(--brand)]"
-          />
-        </section>
-
-        {loading && <p className="text-center text-gray-500 py-10 italic">Loading patients...</p>}
-        {error && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700 text-sm">
-            {error}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {!loading && filtered.map((patient) => (
-            <Card key={patient.userId} className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-lg hover:shadow-xl transition-shadow">
-              <CardContent className="p-5 flex items-center gap-4">
-                <div className="grid h-12 w-12 place-items-center rounded-full bg-[var(--brand)]/30 text-gray-800 font-bold ring-1 ring-[var(--brand)]/50">
-                  {patient.profile?.firstName?.[0]}{patient.profile?.lastName?.[0]}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 truncate">
-                    {patient.profile?.firstName} {patient.profile?.lastName}
-                  </h3>
-                  <p className="text-xs text-gray-500 truncate">{patient.email}</p>
-                </div>
-                <div className="text-emerald-500">
-                  <ShieldCheck className="h-5 w-5" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {!loading && filtered.length === 0 && (
-          <div className="py-20 text-center flex flex-col items-center gap-2">
-            <Users className="h-10 w-10 text-gray-200" />
-            <p className="text-gray-500">No patients found matching your search.</p>
-          </div>
-        )}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+        <Input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by name or email…"
+          aria-label="Search patients"
+          className="h-11 rounded-xl pl-10 shadow-[var(--shadow-card)]"
+        />
       </div>
+
+      {error ? <Notice tone="error">{error}</Notice> : null}
+
+      {loading ? (
+        <Loading rows={4} label="Loading patients…" />
+      ) : filtered.length === 0 ? (
+        <div className="rounded-2xl border border-border bg-card shadow-[var(--shadow-card)]">
+          <Empty
+            icon={Users}
+            action={
+              query ? (
+                <Button variant="outline" size="sm" onClick={() => setQuery('')}>Clear search</Button>
+              ) : undefined
+            }
+          >
+            {query ? 'No patients found matching your search.' : 'No patients yet. Patients appear here after they book with you.'}
+          </Empty>
+        </div>
+      ) : (
+        <>
+          <p className="text-sm text-muted-foreground">
+            {filtered.length} of {patients.length} patient{patients.length === 1 ? '' : 's'}
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((patient) => (
+              <div
+                key={patient.userId}
+                className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-card)] transition-shadow hover:shadow-[var(--shadow-raised)]"
+              >
+                <span className="grid size-11 shrink-0 place-items-center rounded-full bg-brand-50 text-sm font-semibold text-brand-700">
+                  {(patient.profile?.firstName?.[0] ?? '') + (patient.profile?.lastName?.[0] ?? '') || '?'}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium text-slate-900">
+                    {patient.profile?.firstName} {patient.profile?.lastName}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">{patient.email}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

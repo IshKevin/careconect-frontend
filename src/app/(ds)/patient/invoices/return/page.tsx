@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { CheckCircle2, Clock, XCircle } from 'lucide-react';
 import api from '@/lib/api/api';
+import { Button } from '@/components/ui/Button';
+import { cn } from '@/lib/utils';
 import type { PaymentStatus } from '@/hooks/usePayments';
 
 const POLL_INTERVAL_MS = 3000;
@@ -53,18 +55,15 @@ function PaymentReturn() {
   }, [referenceId]);
 
   const backLink = (
-    <Link
-      href="/patient/invoices"
-      className="mt-6 inline-flex items-center rounded-xl bg-[#C4E1E1] px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-black/10 hover:bg-[#b3d8d8]"
-    >
-      Back to invoices
-    </Link>
+    <Button asChild className="mt-4">
+      <Link href="/patient/invoices">Back to invoices</Link>
+    </Button>
   );
 
   if (!referenceId) {
     return (
-      <Panel icon={<XCircle className="h-10 w-10 text-rose-500" />} title="Payment not found">
-        <p className="text-gray-600">We could not find a payment reference in this link.</p>
+      <Panel tone="red" icon={<XCircle className="size-8" />} title="Payment not found">
+        <p className="text-sm text-muted-foreground">We could not find a payment reference in this link.</p>
         {backLink}
       </Panel>
     );
@@ -72,8 +71,8 @@ function PaymentReturn() {
 
   if (status === 'completed') {
     return (
-      <Panel icon={<CheckCircle2 className="h-10 w-10 text-emerald-500" />} title="Payment successful">
-        <p className="text-gray-600">Thank you. Your invoice has been paid.</p>
+      <Panel tone="green" icon={<CheckCircle2 className="size-8" />} title="Payment successful">
+        <p className="text-sm text-muted-foreground">Thank you. Your invoice has been paid.</p>
         {backLink}
       </Panel>
     );
@@ -81,8 +80,8 @@ function PaymentReturn() {
 
   if (status === 'failed' || status === 'reversed' || status === 'invalid') {
     return (
-      <Panel icon={<XCircle className="h-10 w-10 text-rose-500" />} title="Payment not completed">
-        <p className="text-gray-600">
+      <Panel tone="red" icon={<XCircle className="size-8" />} title="Payment not completed">
+        <p className="text-sm text-muted-foreground">
           The payment was not completed. No money was taken for this invoice. You can try again from your invoices.
         </p>
         {backLink}
@@ -92,8 +91,8 @@ function PaymentReturn() {
 
   if (timedOut) {
     return (
-      <Panel icon={<Clock className="h-10 w-10 text-amber-500" />} title="Still processing">
-        <p className="text-gray-600">
+      <Panel tone="amber" icon={<Clock className="size-8" />} title="Still processing">
+        <p className="text-sm text-muted-foreground">
           Your payment is still being confirmed. We will notify you when it completes. You can check again from your invoices.
         </p>
         {backLink}
@@ -102,8 +101,8 @@ function PaymentReturn() {
   }
 
   return (
-    <Panel icon={<Clock className="h-10 w-10 animate-pulse text-sky-500" />} title="Confirming your payment">
-      <p className="text-gray-600">Please keep this page open while we confirm your payment.</p>
+    <Panel tone="blue" icon={<Clock className="size-8 animate-pulse" />} title="Confirming your payment">
+      <p className="text-sm text-muted-foreground">Please keep this page open while we confirm your payment.</p>
     </Panel>
   );
 }
@@ -116,20 +115,31 @@ export default function PaymentReturnPage() {
   );
 }
 
+const PANEL_TONE = {
+  red: 'bg-rose-50 text-rose-600',
+  green: 'bg-emerald-50 text-emerald-600',
+  amber: 'bg-amber-50 text-amber-600',
+  blue: 'bg-sky-50 text-sky-600',
+} as const;
+
 function Panel({
   icon,
   title,
+  tone,
   children,
 }: {
   icon: React.ReactNode;
   title: string;
+  tone: keyof typeof PANEL_TONE;
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-[400px] flex-col items-center justify-center gap-4 p-6 text-center">
-      <div className="rounded-full bg-gray-50 p-3 ring-8 ring-gray-50/50">{icon}</div>
-      <h1 className="text-2xl font-semibold tracking-tight text-gray-900">{title}</h1>
-      <div className="max-w-md space-y-2">{children}</div>
+    <div className="flex justify-center py-6 sm:py-12">
+      <div className="flex w-full max-w-md flex-col items-center gap-4 rounded-2xl border border-border bg-card px-6 py-10 text-center shadow-[var(--shadow-card)]">
+        <span className={cn('grid size-16 place-items-center rounded-full', PANEL_TONE[tone])}>{icon}</span>
+        <h2 className="text-xl font-semibold tracking-tight text-slate-900">{title}</h2>
+        <div className="space-y-2">{children}</div>
+      </div>
     </div>
   );
 }

@@ -3,6 +3,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuthHooks } from '@/hooks/useAuth';
 import api from '@/lib/api/api';
+import { Pencil } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Empty, Loading, Notice, PageHeader, Section, StatusBadge } from '@/components/dashboard/common';
 
 interface Profile {
   userId: string;
@@ -34,8 +40,6 @@ interface UpdateProfile {
   };
   phoneNumber?: string;
 }
-
-const BRAND = '#C4E1E1';
 
 export default function ProfilePage() {
   const { user } = useAuthHooks();
@@ -195,298 +199,170 @@ export default function ProfilePage() {
   }, [profile]);
 
   if (!user) {
-    return (
-      <div className="p-6 text-center">
-        <p className="text-gray-500">Please log in to view your profile.</p>
-      </div>
-    );
+    return <Empty>Please log in to view your profile.</Empty>;
   }
 
+  const fullName = [profile?.profile?.firstName, profile?.profile?.lastName].filter(Boolean).join(' ');
+
   return (
-    <div
-      className="p-6"
-      style={{ '--brand': BRAND } as React.CSSProperties}
-    >
-      {/* brand ribbon */}
-      <div
-        className="mx-auto mb-6 h-1 max-w-5xl rounded-full"
-        style={{
-          background:
-            'linear-gradient(90deg, transparent 0%, var(--brand) 20%, var(--brand) 80%, transparent 100%)',
-        }}
-        aria-hidden
+    <div className="space-y-6">
+      <PageHeader
+        title="Profile"
+        description="Your personal details, contact information and account status."
+        actions={
+          !isEditing ? (
+            <Button onClick={() => setIsEditing(true)} disabled={!profile}>
+              <Pencil className="size-4" />
+              Edit profile
+            </Button>
+          ) : (
+            <>
+              <Button type="button" variant="outline" onClick={handleCancelEdit}>
+                Cancel
+              </Button>
+              <Button type="submit" form="profile-edit-form" disabled={updating}>
+                {updating ? 'Saving…' : 'Save changes'}
+              </Button>
+            </>
+          )
+        }
       />
 
-      <div className="mx-auto max-w-5xl">
-        {/* Header Card */}
-        <div className="relative overflow-hidden rounded-2xl border border-black/5 bg-white shadow-xl">
-          <div
-            className="px-8 py-6"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(196,225,225,0.35) 0%, rgba(255,255,255,0.9) 100%)',
-            }}
-          >
-            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-4">
-                <div
-                  className="grid h-14 w-14 place-items-center rounded-xl text-lg font-semibold text-gray-800 ring-1 ring-black/5"
-                  style={{
-                    background:
-                      'radial-gradient(circle at 30% 30%, var(--brand), #ffffff 70%)',
-                  }}
-                  aria-hidden
-                >
-                  {initials}
-                </div>
-                <div>
-                  <h1 className="text-2xl font-semibold leading-tight text-gray-900">Profile</h1>
-                  <p className="text-sm text-gray-600">
-                    Welcome, <span className="font-medium">{user.profile?.firstName} {user.profile?.lastName}</span>
-                  </p>
-                </div>
-              </div>
+      {error && <Notice tone="error">{error}</Notice>}
+      {success && <Notice tone="success">{success}</Notice>}
 
-              <div className="flex items-center gap-3">
-                {!isEditing ? (
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="rounded-xl bg-[var(--brand)]/80 px-4 py-2 text-sm font-medium text-gray-900 shadow hover:bg-[var(--brand)]"
-                  >
-                    Edit Profile
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleCancelEdit}
-                      className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      form="profile-edit-form"
-                      disabled={updating}
-                      className="rounded-xl bg-[var(--brand)]/80 px-4 py-2 text-sm font-medium text-gray-900 shadow hover:bg-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {updating ? 'Saving…' : 'Save Changes'}
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
+      {loading && !profile ? (
+        <Section title="Profile"><Loading rows={4} /></Section>
+      ) : null}
+
+      {profile ? (
+        <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)] sm:flex-row sm:items-center">
+          <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-brand-50 text-lg font-semibold text-brand-700 ring-1 ring-brand-100" aria-hidden>
+            {initials}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-lg font-semibold text-slate-900">{fullName || 'Your profile'}</p>
+            <p className="truncate text-sm text-muted-foreground">{profile.email}</p>
           </div>
-
-          {/* Notices */}
-          {(loading || error || success) && (
-            <div className="space-y-3 px-8 pb-6 pt-4">
-              {loading && (
-                <div
-                  role="status"
-                  className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700"
-                >
-                  Loading profile…
-                </div>
-              )}
-
-              {error && (
-                <div
-                  role="alert"
-                  className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
-                >
-                  {error}
-                </div>
-              )}
-
-              {success && (
-                <div
-                  role="status"
-                  className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
-                >
-                  {success}
-                </div>
-              )}
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium capitalize text-slate-700">{profile.userType}</span>
+            <StatusBadge value={profile.accountStatus} />
+          </div>
         </div>
+      ) : null}
 
-        {/* Content */}
-        <div className="mt-6 space-y-6">
-          {profile && !isEditing ? (
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* Personal */}
-              <SectionCard title="Personal Information">
-                <Info label="First Name" value={profile.profile?.firstName} />
-                <Info label="Last Name" value={profile.profile?.lastName} />
-                <Info
-                  label="Date of Birth"
-                  value={
-                    profile.profile?.dateOfBirth
-                      ? new Date(profile.profile.dateOfBirth).toLocaleDateString()
-                      : null
-                  }
-                />
-                <Info label="Gender" value={profile.profile?.gender} />
-              </SectionCard>
-
-              {/* Contact / Account */}
-              <SectionCard title="Contact & Account">
-                <Info label="Email" value={profile.email} badge={profile.emailVerified} />
-                <Info label="Phone Number" value={profile.phoneNumber} badge={profile.phoneVerified} />
-                <Info label="User Type" value={profile.userType} />
-                <Info label="Account Status" value={profile.accountStatus} status />
-              </SectionCard>
-
-              {/* Address */}
-              <SectionCard title="Address" className="lg:col-span-2">
-                <Info label="Street Address" value={profile.profile?.address} />
-              </SectionCard>
-
-              {/* Meta */}
-              <SectionCard title="Security & Activity" className="lg:col-span-2">
-                <div className="grid gap-4 sm:grid-cols-2 text-sm text-gray-600">
-                  <div>
-                    <span className="block text-gray-500">Member since</span>
-                    <span className="mt-1 block font-medium text-gray-900">
-                      {new Date(profile.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-gray-500">Last login</span>
-                    <span className="mt-1 block font-medium text-gray-900">
-                      {profile.lastLogin ? new Date(profile.lastLogin).toLocaleString() : 'Never'}
-                    </span>
-                  </div>
-                </div>
-              </SectionCard>
-            </div>
-          ) : profile && isEditing ? (
-            <form id="profile-edit-form" onSubmit={handleUpdateProfile} className="space-y-6">
-              <SectionCard title="Edit Profile">
-                <div className="grid gap-6 md:grid-cols-2">
-                  <Input label="First Name" name="firstName" value={updateData.profile.firstName} onChange={handleInputChange} required />
-                  <Input label="Last Name" name="lastName" value={updateData.profile.lastName} onChange={handleInputChange} required />
-                  <Input type="date" label="Date of Birth" name="dateOfBirth" value={updateData.profile.dateOfBirth} onChange={handleInputChange} />
-                  <Select label="Gender" name="gender" value={updateData.profile.gender} onChange={handleInputChange} options={['male', 'female', 'other']} />
-                  <Input type="tel" label="Phone Number" name="phoneNumber" value={updateData.phoneNumber} onChange={handleInputChange} />
-                </div>
-                <Textarea label="Address" name="address" value={updateData.profile.address} onChange={handleInputChange} rows={3} />
-              </SectionCard>
-
-              {/* action row duplicated up top for convenience */}
-              <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={handleCancelEdit}
-                  className="rounded-xl border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={updating}
-                  className="rounded-xl bg-[var(--brand)]/80 px-5 py-2 text-sm font-medium text-gray-900 shadow hover:bg-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {updating ? 'Updating…' : 'Save Changes'}
-                </button>
+      {profile && !isEditing ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Section title="Personal information">
+            <dl className="grid gap-4 sm:grid-cols-2">
+              <Info label="First name" value={profile.profile?.firstName} />
+              <Info label="Last name" value={profile.profile?.lastName} />
+              <Info
+                label="Date of birth"
+                value={profile.profile?.dateOfBirth ? new Date(profile.profile.dateOfBirth).toLocaleDateString() : null}
+              />
+              <Info label="Gender" value={profile.profile?.gender} capitalize />
+              <div className="sm:col-span-2">
+                <Info label="Address" value={profile.profile?.address} />
               </div>
-            </form>
-          ) : null}
+            </dl>
+          </Section>
+
+          <Section title="Contact and account">
+            <dl className="grid gap-4 sm:grid-cols-2">
+              <Info label="Email" value={profile.email} badge={profile.emailVerified} />
+              <Info label="Phone number" value={profile.phoneNumber} badge={profile.phoneVerified} />
+              <Info label="User type" value={profile.userType} capitalize />
+              <div>
+                <dt className="text-xs font-medium text-muted-foreground">Account status</dt>
+                <dd className="mt-1"><StatusBadge value={profile.accountStatus} /></dd>
+              </div>
+            </dl>
+          </Section>
+
+          <Section title="Security and activity" className="lg:col-span-2">
+            <dl className="grid gap-4 sm:grid-cols-2">
+              <Info label="Member since" value={new Date(profile.createdAt).toLocaleDateString()} />
+              <Info label="Last login" value={profile.lastLogin ? new Date(profile.lastLogin).toLocaleString() : 'Never'} />
+            </dl>
+          </Section>
         </div>
-      </div>
+      ) : profile && isEditing ? (
+        <form id="profile-edit-form" onSubmit={handleUpdateProfile} className="space-y-6">
+          <Section title="Edit profile" description="Your email address cannot be changed here.">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field id="firstName" label="First name">
+                <Input id="firstName" name="firstName" value={updateData.profile.firstName} onChange={handleInputChange} required />
+              </Field>
+              <Field id="lastName" label="Last name">
+                <Input id="lastName" name="lastName" value={updateData.profile.lastName} onChange={handleInputChange} required />
+              </Field>
+              <Field id="dateOfBirth" label="Date of birth">
+                <Input id="dateOfBirth" type="date" name="dateOfBirth" value={updateData.profile.dateOfBirth} onChange={handleInputChange} />
+              </Field>
+              <Field id="gender" label="Gender">
+                <select
+                  id="gender"
+                  name="gender"
+                  value={updateData.profile.gender}
+                  onChange={handleInputChange}
+                  className="flex h-10 w-full rounded-lg border border-input bg-card px-3 text-base capitalize shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20 md:text-sm"
+                >
+                  <option value="">Select</option>
+                  {['male', 'female', 'other'].map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field id="phoneNumber" label="Phone number">
+                <Input id="phoneNumber" type="tel" name="phoneNumber" value={updateData.phoneNumber} onChange={handleInputChange} />
+              </Field>
+              <div className="md:col-span-2">
+                <Field id="address" label="Address">
+                  <Textarea id="address" name="address" value={updateData.profile.address} onChange={handleInputChange} rows={3} />
+                </Field>
+              </div>
+            </div>
+          </Section>
+
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={handleCancelEdit}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={updating}>
+              {updating ? 'Updating…' : 'Save changes'}
+            </Button>
+          </div>
+        </form>
+      ) : null}
     </div>
   );
 }
 
-/* ---------- UI atoms (kept simple, no functionality changes) ---------- */
+/* ---------- Small UI helpers ---------- */
 
-const SectionCard = ({
-  title,
-  children,
-  className = '',
-}: { title: string; children: React.ReactNode; className?: string }) => (
-  <section className={`rounded-2xl border border-black/5 bg-white/80 p-6 shadow-xl backdrop-blur ${className}`}>
-    <header className="mb-4">
-      <h3 className="text-base font-semibold text-gray-800">{title}</h3>
-      <div className="mt-2 h-px w-full bg-gradient-to-r from-transparent via-black/10 to-transparent" />
-    </header>
-    <div className="grid gap-4">{children}</div>
-  </section>
-);
-
-const Info = ({ label, value, badge, status }: { label: string; value?: string | null; badge?: boolean | null; status?: boolean }) => (
-  <div>
-    <label className="block text-xs font-medium uppercase tracking-wide text-gray-500">{label}</label>
-    <p className="mt-1 text-[15px] font-medium text-gray-900">{value || 'Not provided'}</p>
-
+const Info = ({ label, value, badge, capitalize }: { label: string; value?: string | null; badge?: boolean | null; capitalize?: boolean }) => (
+  <div className="min-w-0">
+    <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+    <dd className={`mt-1 break-words text-sm font-medium ${value ? 'text-slate-900' : 'text-slate-400'} ${capitalize ? 'capitalize' : ''}`}>
+      {value || 'Not provided'}
+    </dd>
     {badge !== undefined && (
-      <span
-        className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ring-1 ${badge
-          ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-          : 'bg-amber-50 text-amber-700 ring-amber-200'
-          }`}
-      >
-        <Dot ok={!!badge} />
-        {badge ? 'Verified' : 'Not verified'}
-      </span>
-    )}
-
-    {status && (
-      <span
-        className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs capitalize ring-1 ${value === 'active'
-          ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-          : value === 'pending'
-            ? 'bg-amber-50 text-amber-700 ring-amber-200'
-            : 'bg-rose-50 text-rose-700 ring-rose-200'
-          }`}
-      >
-        <Dot ok={value === 'active'} />
-        {value}
-      </span>
+      <dd className="mt-1.5">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${badge ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-amber-50 text-amber-700 ring-amber-600/20'}`}
+        >
+          <span className={`size-1.5 rounded-full ${badge ? 'bg-emerald-500' : 'bg-amber-500'}`} aria-hidden />
+          {badge ? 'Verified' : 'Not verified'}
+        </span>
+      </dd>
     )}
   </div>
 );
 
-const Input = ({ label, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700">{label}</label>
-    <input
-      {...props}
-      className="mt-1 h-11 w-full rounded-xl border border-gray-300 bg-white px-3 shadow-sm outline-none ring-0 transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-    />
+const Field = ({ id, label, children }: { id: string; label: string; children: React.ReactNode }) => (
+  <div className="grid gap-1.5">
+    <Label htmlFor={id}>{label}</Label>
+    {children}
   </div>
-);
-
-const Select = ({ label, options, ...props }: React.SelectHTMLAttributes<HTMLSelectElement> & { label: string; options: string[] }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700">{label}</label>
-    <select
-      {...props}
-      className="mt-1 h-11 w-full rounded-xl border border-gray-300 bg-white px-3 shadow-sm outline-none ring-0 transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-    >
-      <option value="">Select</option>
-      {options.map((opt: string) => (
-        <option key={opt} value={opt} className="capitalize">
-          {opt}
-        </option>
-      ))}
-    </select>
-  </div>
-);
-
-const Textarea = ({ label, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700">{label}</label>
-    <textarea
-      {...props}
-      className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-3 shadow-sm outline-none ring-0 transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-    />
-  </div>
-);
-
-const Dot = ({ ok }: { ok: boolean }) => (
-  <svg width="10" height="10" viewBox="0 0 10 10" className="inline-block">
-    <circle cx="5" cy="5" r="4" className={ok ? 'fill-emerald-500' : 'fill-amber-500'} />
-  </svg>
 );

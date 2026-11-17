@@ -1,9 +1,12 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { Pencil, Pill, Plus, Search, Trash2 } from 'lucide-react';
 import { useAuthHooks } from '@/hooks/useAuth';
 import { safeLocalStorage } from '@/lib/storage';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/input';
+import { Empty, Loading, Notice, PageHeader, Section, formatDate } from '@/components/dashboard/common';
 
 type Frequency =
   | 'Once daily'
@@ -21,39 +24,25 @@ interface Medication {
   notes?: string;
 }
 
-const BRAND = '#C4E1E1';
 const STORAGE_KEY = 'patient_medications_dummy';
 
 function makeId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Seed data for first run
-const seedMeds: Medication[] = [
-  {
-    medicationId: makeId(),
-    medicationName: 'Metformin',
-    dosage: '500 mg',
-    frequency: 'Twice daily',
-    startDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 45).toISOString(),
-    notes: 'Take with meals',
-  },
-  {
-    medicationId: makeId(),
-    medicationName: 'Atorvastatin',
-    dosage: '20 mg',
-    frequency: 'Once daily',
-    startDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 120).toISOString(),
-  },
-  {
-    medicationId: makeId(),
-    medicationName: 'Albuterol Inhaler',
-    dosage: '2 puffs',
-    frequency: 'As needed',
-    startDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
-    notes: 'For wheezing or shortness of breath',
-  },
-];
+// Earlier versions of this page wrote three made-up sample medications into the browser. Drop them on load
+// so a patient never sees medications they did not enter.
+const OLD_SAMPLE_ENTRIES = new Set([
+  'Metformin|500 mg|Take with meals',
+  'Atorvastatin|20 mg|',
+  'Albuterol Inhaler|2 puffs|For wheezing or shortness of breath',
+]);
+
+const FREQUENCIES: Frequency[] = ['Once daily', 'Twice daily', 'Three times daily', 'Weekly', 'As needed'];
+
+const selectClass =
+  'h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20';
+const labelClass = 'text-sm font-medium text-slate-700';
 
 export default function MedicationsPage() {
   const { user } = useAuthHooks();
@@ -94,16 +83,14 @@ export default function MedicationsPage() {
     );
   }, [medications, query]);
 
-  // Load from localStorage or seed
+  // Load from localStorage
   useEffect(() => {
     if (!user) return;
     try {
       const raw = safeLocalStorage.getItem(STORAGE_KEY);
       if (raw) {
-        setMedications(JSON.parse(raw));
-      } else {
-        setMedications(seedMeds);
-        safeLocalStorage.setItem(STORAGE_KEY, JSON.stringify(seedMeds));
+        const parsed: Medication[] = JSON.parse(raw);
+        setMedications(parsed.filter((m) => !OLD_SAMPLE_ENTRIES.has(`${m.medicationName}|${m.dosage}|${m.notes ?? ''}`)));
       }
     } catch {
       setError('Failed to load medications from local storage.');
@@ -187,248 +174,187 @@ export default function MedicationsPage() {
     setMedications((prev) => prev.filter((m) => m.medicationId !== id));
   };
 
+  const frequencyOptions = FREQUENCIES.map((f) => <option key={f}>{f}</option>);
+
   return (
-    <div
-      className="p-6 text-gray-900"
-      style={{ ['--brand' as any]: BRAND } as React.CSSProperties}
-    >
-      {/* brand ribbon */}
-      <div
-        className="mb-5 h-1 w-full rounded-full"
-        style={{
-          background:
-            'linear-gradient(90deg, transparent 0%, var(--brand) 22%, var(--brand) 78%, transparent 100%)',
-        }}
-        aria-hidden
-      />
+    <div className="space-y-6">
+      <PageHeader title="Medications" description="Track the medicines you take, the dose and how often." />
 
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Medications</h1>
-        <p className="mt-1 text-gray-600">
-          Manage your medications,{' '}
-          <span className="font-medium">
-            {user.profile?.firstName} {user.profile?.lastName}
-          </span>
-          .
-        </p>
-      </header>
+      <Notice tone="warning">
+        This list is saved in this browser only and is not yet shared with your doctors. Bring it to your appointments.
+      </Notice>
 
-      {/* Alerts */}
-      {error && (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700" role="alert">
-          {error}
-        </div>
-      )}
-      {loading && (
-        <div className="mb-4 rounded-xl border border-black/5 bg-white/80 p-4 text-sm text-gray-600 shadow-sm backdrop-blur">
-          Loading...
-        </div>
-      )}
+      {error && <Notice tone="error">{error}</Notice>}
 
       {/* Create */}
-      <section className="rounded-2xl border border-black/5 bg-white/80 shadow-xl backdrop-blur">
-        <details open className="group">
-          <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4">
-            <span className="text-base font-medium text-gray-800">Add new medication</span>
-            <span className="text-xs text-gray-500 group-open:opacity-60">Collapse/Expand</span>
-          </summary>
-          <div className="h-px w-full bg-gradient-to-r from-transparent via-black/10 to-transparent" />
-          <div className="p-5">
-            <form onSubmit={addMedication} className="grid grid-cols-1 gap-4 md:grid-cols-5">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700">Name</label>
-                <input
-                  type="text"
-                  value={draft.medicationName}
-                  onChange={(e) => setDraft((s) => ({ ...s, medicationName: e.target.value }))}
-                  className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white/70 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                  placeholder="e.g., Metformin"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Dosage</label>
-                <input
-                  type="text"
-                  value={draft.dosage}
-                  onChange={(e) => setDraft((s) => ({ ...s, dosage: e.target.value }))}
-                  className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white/70 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                  placeholder="e.g., 500 mg"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Frequency</label>
-                <select
-                  value={draft.frequency}
-                  onChange={(e) => setDraft((s) => ({ ...s, frequency: e.target.value as Frequency }))}
-                  className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white/70 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                >
-                  <option>Once daily</option>
-                  <option>Twice daily</option>
-                  <option>Three times daily</option>
-                  <option>Weekly</option>
-                  <option>As needed</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Start date</label>
-                <input
-                  type="date"
-                  value={draft.startDate}
-                  onChange={(e) => setDraft((s) => ({ ...s, startDate: e.target.value }))}
-                  className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white/70 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                />
-              </div>
-              <div className="md:col-span-5">
-                <label className="block text-sm font-medium text-gray-700">Notes</label>
-                <input
-                  type="text"
-                  value={draft.notes}
-                  onChange={(e) => setDraft((s) => ({ ...s, notes: e.target.value }))}
-                  className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white/70 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-                  placeholder="optional"
-                />
-              </div>
-              <div className="md:col-span-5 flex justify-end">
-                <button
-                  type="submit"
-                  className="inline-flex items-center rounded-xl bg-[var(--brand)]/70 px-4 py-2.5 font-medium text-gray-900 ring-1 ring-[var(--brand)]/60 transition hover:bg-[var(--brand)]/90"
-                >
-                  Add medication
-                </button>
-              </div>
-            </form>
+      <Section title="Add a medication">
+        <form onSubmit={addMedication} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="grid gap-1.5 sm:col-span-2">
+            <span className={labelClass}>Name</span>
+            <Input
+              type="text"
+              value={draft.medicationName}
+              onChange={(e) => setDraft((s) => ({ ...s, medicationName: e.target.value }))}
+              placeholder="e.g., Metformin"
+              required
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className={labelClass}>Dosage</span>
+            <Input
+              type="text"
+              value={draft.dosage}
+              onChange={(e) => setDraft((s) => ({ ...s, dosage: e.target.value }))}
+              placeholder="e.g., 500 mg"
+              required
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className={labelClass}>Frequency</span>
+            <select
+              value={draft.frequency}
+              onChange={(e) => setDraft((s) => ({ ...s, frequency: e.target.value as Frequency }))}
+              className={selectClass}
+            >
+              {frequencyOptions}
+            </select>
+          </label>
+          <label className="grid gap-1.5">
+            <span className={labelClass}>Start date</span>
+            <Input
+              type="date"
+              value={draft.startDate}
+              onChange={(e) => setDraft((s) => ({ ...s, startDate: e.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1.5 sm:col-span-2 lg:col-span-3">
+            <span className={labelClass}>Notes</span>
+            <Input
+              type="text"
+              value={draft.notes}
+              onChange={(e) => setDraft((s) => ({ ...s, notes: e.target.value }))}
+              placeholder="Optional, e.g. take with meals"
+            />
+          </label>
+          <div className="flex justify-end sm:col-span-2 lg:col-span-4">
+            <Button type="submit" className="w-full sm:w-auto">
+              <Plus /> Add medication
+            </Button>
           </div>
-        </details>
-      </section>
-
-      {/* Search */}
-      <div className="mt-6">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name, dosage, frequency or note…"
-          className="h-11 w-full rounded-xl border border-black/10 bg-white/70 px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
-        />
-      </div>
+        </form>
+      </Section>
 
       {/* List */}
-      <section className="mt-6 rounded-2xl border border-black/5 bg-white/80 p-5 shadow-xl backdrop-blur">
-        <h2 className="text-base font-medium text-gray-800">
-          Your medications <span className="text-xs text-gray-500">({filtered.length})</span>
-        </h2>
+      <Section title="Your medications" description={`${filtered.length} recorded`} flush>
+        <div className="border-b border-border p-4">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by name, dosage, frequency or note…"
+              className="pl-9"
+              aria-label="Search medications"
+            />
+          </div>
+        </div>
 
-        {filtered.length === 0 ? (
-          <p className="py-6 text-center text-gray-500">No medications yet.</p>
+        {loading ? (
+          <div className="p-5"><Loading /></div>
+        ) : filtered.length === 0 ? (
+          <Empty icon={Pill}>
+            {medications.length === 0 ? 'No medications yet. Add one with the form above.' : 'No medications match your search.'}
+          </Empty>
         ) : (
-          <ul className="mt-3 divide-y divide-black/5">
+          <ul className="divide-y divide-border">
             {filtered.map((m) => {
               const isEditing = editingId === m.medicationId;
               return (
-                <li key={m.medicationId} className="py-4">
+                <li key={m.medicationId} className="px-5 py-4">
                   {!isEditing ? (
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm text-gray-500">
-                          {m.startDate ? new Date(m.startDate).toLocaleDateString() : '—'}
-                        </p>
-                        <p className="mt-0.5 text-base font-medium text-gray-900">
-                          {m.medicationName}{' '}
-                          <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700 ring-1 ring-black/10">
-                            {m.dosage}
-                          </span>
-                        </p>
-                        <p className="text-sm text-gray-700">
-                          {m.frequency}
-                          {m.notes ? ` • ${m.notes}` : ''}
-                        </p>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 gap-3">
+                        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-600">
+                          <Pill className="size-5" />
+                        </span>
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-medium text-slate-900">{m.medicationName}</p>
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">{m.dosage}</span>
+                          </div>
+                          <p className="text-sm text-slate-700">
+                            {m.frequency}
+                            {m.notes ? <span className="text-muted-foreground"> · {m.notes}</span> : null}
+                          </p>
+                          <p className="text-xs text-muted-foreground">Started {formatDate(m.startDate)}</p>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => startEdit(m)}
-                          className="rounded-lg bg-yellow-100 px-3 py-1.5 text-sm font-medium text-yellow-900 ring-1 ring-yellow-200 hover:bg-yellow-200"
-                        >
-                          Edit
-                        </button>
-                        <button
+                      <div className="flex shrink-0 gap-2">
+                        <Button size="sm" variant="outline" onClick={() => startEdit(m)}>
+                          <Pencil /> Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-rose-600 hover:bg-rose-50 hover:text-rose-700"
                           onClick={() => deleteMedication(m.medicationId)}
-                          className="rounded-lg bg-red-100 px-3 py-1.5 text-sm font-medium text-red-900 ring-1 ring-red-200 hover:bg-red-200"
                         >
-                          Delete
-                        </button>
+                          <Trash2 /> Delete
+                        </Button>
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-black/10 bg-white p-4">
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
-                        <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700">Name</label>
-                          <input
+                    <div className="rounded-xl border border-border bg-slate-50/70 p-4">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <label className="grid gap-1.5 sm:col-span-2">
+                          <span className={labelClass}>Name</span>
+                          <Input
                             type="text"
                             value={editDraft.medicationName}
                             onChange={(e) => setEditDraft((s) => ({ ...s, medicationName: e.target.value }))}
-                            className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
                           />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Dosage</label>
-                          <input
+                        </label>
+                        <label className="grid gap-1.5">
+                          <span className={labelClass}>Dosage</span>
+                          <Input
                             type="text"
                             value={editDraft.dosage}
                             onChange={(e) => setEditDraft((s) => ({ ...s, dosage: e.target.value }))}
-                            className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
                           />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Frequency</label>
+                        </label>
+                        <label className="grid gap-1.5">
+                          <span className={labelClass}>Frequency</span>
                           <select
                             value={editDraft.frequency}
                             onChange={(e) =>
                               setEditDraft((s) => ({ ...s, frequency: e.target.value as Frequency }))
                             }
-                            className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
+                            className={selectClass}
                           >
-                            <option>Once daily</option>
-                            <option>Twice daily</option>
-                            <option>Three times daily</option>
-                            <option>Weekly</option>
-                            <option>As needed</option>
+                            {frequencyOptions}
                           </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700">Start date</label>
-                          <input
+                        </label>
+                        <label className="grid gap-1.5">
+                          <span className={labelClass}>Start date</span>
+                          <Input
                             type="date"
                             value={editDraft.startDate}
                             onChange={(e) => setEditDraft((s) => ({ ...s, startDate: e.target.value }))}
-                            className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
                           />
-                        </div>
-                        <div className="md:col-span-5">
-                          <label className="block text-sm font-medium text-gray-700">Notes</label>
-                          <input
+                        </label>
+                        <label className="grid gap-1.5 sm:col-span-2 lg:col-span-3">
+                          <span className={labelClass}>Notes</span>
+                          <Input
                             type="text"
                             value={editDraft.notes}
                             onChange={(e) => setEditDraft((s) => ({ ...s, notes: e.target.value }))}
-                            className="mt-1 h-11 w-full rounded-xl border border-black/10 bg-white px-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand)]"
                           />
-                        </div>
+                        </label>
                       </div>
                       <div className="mt-3 flex gap-2">
-                        <button
-                          onClick={() => saveEdit(m.medicationId)}
-                          className="rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={cancelEdit}
-                          className="rounded-lg bg-gray-200 px-4 py-2 text-gray-900 hover:bg-gray-300"
-                        >
-                          Cancel
-                        </button>
+                        <Button size="sm" onClick={() => saveEdit(m.medicationId)}>Save</Button>
+                        <Button size="sm" variant="ghost" onClick={cancelEdit}>Cancel</Button>
                       </div>
                     </div>
                   )}
@@ -437,7 +363,7 @@ export default function MedicationsPage() {
             })}
           </ul>
         )}
-      </section>
+      </Section>
     </div>
   );
 }

@@ -3,6 +3,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useAuthHooks } from '@/hooks/useAuth';
 import api from '@/lib/api/api';
+import { Pencil } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Loading, Notice, PageHeader, Section, StatusBadge } from '@/components/dashboard/common';
+import { cn } from '@/lib/utils';
 
 interface Profile {
   userId: string;
@@ -43,8 +49,6 @@ interface UpdateProfile {
   medicalLicenseNumber?: string;
 }
 
-const BRAND = '#C4E1E1';
-
 export default function ProfilePage() {
   const { user } = useAuthHooks();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -84,14 +88,20 @@ export default function ProfilePage() {
 
         if (fetchedProfile && fetchedProfile.profile) {
           setProfile(fetchedProfile);
+          // Fill every field the edit form shows (the form used to open with date of birth, gender,
+          // address and phone empty, so saving without touching them cleared them).
           setUpdateData({
             profile: {
               firstName: fetchedProfile.profile.firstName || '',
               lastName: fetchedProfile.profile.lastName || '',
+              dateOfBirth: (fetchedProfile.profile.dateOfBirth || '').slice(0, 10),
+              gender: fetchedProfile.profile.gender || '',
+              address: fetchedProfile.profile.address || '',
               specialty: fetchedProfile.profile.specialty || '',
               bio: fetchedProfile.profile.bio || '',
               consultationFee: fetchedProfile.profile.consultationFee ?? 0,
             },
+            phoneNumber: fetchedProfile.phoneNumber || '',
             medicalLicenseNumber: fetchedProfile.medicalLicenseNumber || '',
           });
         } else if (fetchedProfile) {
@@ -180,7 +190,7 @@ export default function ProfilePage() {
         profile: {
           firstName: profile.profile?.firstName || '',
           lastName: profile.profile?.lastName || '',
-          dateOfBirth: profile.profile?.dateOfBirth || '',
+          dateOfBirth: (profile.profile?.dateOfBirth || '').slice(0, 10),
           gender: profile.profile?.gender || '',
           address: profile.profile?.address || '',
           specialty: profile.profile?.specialty || '',
@@ -202,304 +212,157 @@ export default function ProfilePage() {
     return (f + l || 'U').toUpperCase();
   }, [profile]);
 
+
   if (!user) {
-    return (
-      <div className="p-6 text-center">
-        <p className="text-gray-500">Please log in to view your profile.</p>
-      </div>
-    );
+    return <Notice tone="info">Please log in to view your profile.</Notice>;
   }
 
+  const name = `${profile?.profile?.firstName ?? user.profile?.firstName ?? ''} ${profile?.profile?.lastName ?? user.profile?.lastName ?? ''}`.trim();
+
   return (
-    <div
-      className="p-6"
-      style={{ '--brand': BRAND } as React.CSSProperties}
-    >
-      {/* brand ribbon */}
-      <div
-        className="mx-auto mb-6 h-1 max-w-5xl rounded-full"
-        style={{
-          background:
-            'linear-gradient(90deg, transparent 0%, var(--brand) 20%, var(--brand) 80%, transparent 100%)',
-        }}
-        aria-hidden
+    <div className="space-y-6">
+      <PageHeader
+        title="Profile"
+        description="Your personal details and account information."
+        actions={
+          !profile ? null : !isEditing ? (
+            <Button variant="outline" onClick={() => setIsEditing(true)}>
+              <Pencil /> Edit profile
+            </Button>
+          ) : (
+            <>
+              <Button type="button" variant="outline" onClick={handleCancelEdit}>Cancel</Button>
+              <Button type="submit" form="profile-edit-form" disabled={updating}>
+                {updating ? 'Saving…' : 'Save changes'}
+              </Button>
+            </>
+          )
+        }
       />
 
-      <div className="mx-auto max-w-5xl">
-        {/* Header Card */}
-        <div className="relative overflow-hidden rounded-2xl border border-black/5 bg-white shadow-xl">
-          <div
-            className="px-8 py-6"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(196,225,225,0.35) 0%, rgba(255,255,255,0.9) 100%)',
-            }}
-          >
-            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-4">
-                <div
-                  className="grid h-14 w-14 place-items-center rounded-xl text-lg font-semibold text-gray-800 ring-1 ring-black/5"
-                  style={{
-                    background:
-                      'radial-gradient(circle at 30% 30%, var(--brand), #ffffff 70%)',
-                  }}
-                  aria-hidden
-                >
-                  {initials}
-                </div>
-                <div>
-                  <h1 className="text-2xl font-semibold leading-tight text-gray-900">Profile</h1>
-                  <p className="text-sm text-gray-600">
-                    Welcome, <span className="font-medium">{user.profile?.firstName} {user.profile?.lastName}</span>
-                    {profile?.userType === 'doctor' && (
-                      <span className="block text-xs text-gray-500">
-                        {profile.profile?.specialty || 'No specialty set'}
-                      </span>
-                    )}
-                  </p>
-                </div>
-              </div>
+      {loading ? <Loading rows={3} label="Loading profile…" /> : null}
+      {error ? <Notice tone="error">{error}</Notice> : null}
+      {success ? <Notice tone="success">{success}</Notice> : null}
 
-              <div className="flex items-center gap-3">
-                {!isEditing ? (
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="rounded-xl border border-black/10 bg-white px-4 py-2 text-sm font-medium text-gray-900 shadow hover:bg-gray-50"
-                  >
-                    Edit Profile
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleCancelEdit}
-                      className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      form="profile-edit-form"
-                      disabled={updating}
-                      className="rounded-xl bg-[var(--brand)]/80 px-4 py-2 text-sm font-medium text-gray-900 shadow hover:bg-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {updating ? 'Saving…' : 'Save Changes'}
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
+      {profile ? (
+        <div className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-[var(--shadow-card)]">
+          <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-brand-50 text-lg font-semibold text-brand-700 ring-1 ring-brand-100" aria-hidden>
+            {initials}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-lg font-semibold text-slate-900">
+              {profile.userType === 'doctor' ? 'Dr. ' : ''}{name}
+            </p>
+            <p className="truncate text-sm text-muted-foreground">
+              {profile.userType === 'doctor' ? profile.profile?.specialty || 'No specialty set' : profile.email}
+            </p>
           </div>
-
-          {/* Notices */}
-          {(loading || error || success) && (
-            <div className="space-y-3 px-8 pb-6 pt-4">
-              {loading && (
-                <div
-                  role="status"
-                  className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700"
-                >
-                  Loading profile…
-                </div>
-              )}
-
-              {error && (
-                <div
-                  role="alert"
-                  className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
-                >
-                  {error}
-                </div>
-              )}
-
-              {success && (
-                <div
-                  role="status"
-                  className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
-                >
-                  {success}
-                </div>
-              )}
-            </div>
-          )}
+          <StatusBadge value={profile.accountStatus} className="hidden sm:inline-flex" />
         </div>
+      ) : null}
 
-        {/* Content */}
-        <div className="mt-6 space-y-6">
-          {profile && !isEditing ? (
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* Personal */}
-              <SectionCard title="Personal Information">
-                <Info label="First Name" value={profile.profile?.firstName} />
-                <Info label="Last Name" value={profile.profile?.lastName} />
-                <Info
-                  label="Date of Birth"
-                  value={
-                    profile.profile?.dateOfBirth
-                      ? new Date(profile.profile.dateOfBirth).toLocaleDateString()
-                      : null
-                  }
-                />
-                <Info label="Gender" value={profile.profile?.gender} />
-              </SectionCard>
-
-              {/* Contact / Account */}
-              <SectionCard title="Contact & Account">
-                <Info label="Email" value={profile.email} badge={profile.emailVerified} />
-                <Info label="Phone Number" value={profile.phoneNumber} badge={profile.phoneVerified} />
-                <Info label="User Type" value={profile.userType} />
-                <Info label="Account Status" value={profile.accountStatus} status />
-              </SectionCard>
-
-              {/* Address */}
-              <SectionCard title="Address" className="lg:col-span-2">
-                <Info label="Street Address" value={profile.profile?.address} />
-              </SectionCard>
-
-              {/* Meta */}
-              <SectionCard title="Security & Activity" className="lg:col-span-2">
-                <div className="grid gap-4 sm:grid-cols-2 text-sm text-gray-600">
-                  <div>
-                    <span className="block text-gray-500">Member since</span>
-                    <span className="mt-1 block font-medium text-gray-900">
-                      {new Date(profile.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-gray-500">Last login</span>
-                    <span className="mt-1 block font-medium text-gray-900">
-                      {profile.lastLogin ? new Date(profile.lastLogin).toLocaleString() : 'Never'}
-                    </span>
-                  </div>
-                </div>
-              </SectionCard>
-            </div>
-          ) : profile && isEditing ? (
-            <form id="profile-edit-form" onSubmit={handleUpdateProfile} className="space-y-6">
-              <SectionCard title="Edit Profile">
-                <div className="grid gap-6 md:grid-cols-2">
-                  <Input label="First Name" name="firstName" value={updateData.profile.firstName} onChange={handleInputChange} required />
-                  <Input label="Last Name" name="lastName" value={updateData.profile.lastName} onChange={handleInputChange} required />
-                  <Input type="date" label="Date of Birth" name="dateOfBirth" value={updateData.profile.dateOfBirth} onChange={handleInputChange} />
-                  <Select label="Gender" name="gender" value={updateData.profile.gender} onChange={handleInputChange} options={['male', 'female', 'other']} />
-                  <Input type="tel" label="Phone Number" name="phoneNumber" value={updateData.phoneNumber} onChange={handleInputChange} />
-                </div>
-                <Textarea label="Address" name="address" value={updateData.profile.address} onChange={handleInputChange} rows={3} />
-              </SectionCard>
-
-              {/* action row duplicated up top for convenience */}
-              <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  onClick={handleCancelEdit}
-                  className="rounded-xl border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={updating}
-                  className="rounded-xl bg-[var(--brand)]/80 px-5 py-2 text-sm font-medium text-gray-900 shadow hover:bg-[var(--brand)] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {updating ? 'Updating…' : 'Save Changes'}
-                </button>
+      {profile && !isEditing ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Section title="Personal information">
+            <dl className="grid gap-4 sm:grid-cols-2">
+              <Info label="First name" value={profile.profile?.firstName} />
+              <Info label="Last name" value={profile.profile?.lastName} />
+              <Info
+                label="Date of birth"
+                value={profile.profile?.dateOfBirth ? new Date(profile.profile.dateOfBirth).toLocaleDateString() : null}
+              />
+              <Info label="Gender" value={profile.profile?.gender} />
+              <div className="sm:col-span-2">
+                <Info label="Address" value={profile.profile?.address} />
               </div>
-            </form>
-          ) : null}
+            </dl>
+          </Section>
+
+          <Section title="Contact & account">
+            <dl className="grid gap-4 sm:grid-cols-2">
+              <Info label="Email" value={profile.email} badge={profile.emailVerified} />
+              <Info label="Phone number" value={profile.phoneNumber} badge={profile.phoneVerified} />
+              <Info label="User type" value={profile.userType} />
+              <div>
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Account status</dt>
+                <dd className="mt-1"><StatusBadge value={profile.accountStatus} /></dd>
+              </div>
+            </dl>
+          </Section>
+
+          <Section title="Security & activity" className="lg:col-span-2">
+            <dl className="grid gap-4 sm:grid-cols-2">
+              <Info label="Member since" value={new Date(profile.createdAt).toLocaleDateString()} />
+              <Info label="Last login" value={profile.lastLogin ? new Date(profile.lastLogin).toLocaleString() : 'Never'} />
+            </dl>
+          </Section>
         </div>
-      </div>
+      ) : profile && isEditing ? (
+        <form id="profile-edit-form" onSubmit={handleUpdateProfile} className="space-y-6">
+          <Section title="Edit profile" description="Changes are saved to your account when you press Save changes.">
+            <div className="grid gap-5 md:grid-cols-2">
+              <Field label="First name" htmlFor="firstName">
+                <Input id="firstName" name="firstName" value={updateData.profile.firstName} onChange={handleInputChange} required />
+              </Field>
+              <Field label="Last name" htmlFor="lastName">
+                <Input id="lastName" name="lastName" value={updateData.profile.lastName} onChange={handleInputChange} required />
+              </Field>
+              <Field label="Date of birth" htmlFor="dateOfBirth">
+                <Input id="dateOfBirth" type="date" name="dateOfBirth" value={updateData.profile.dateOfBirth} onChange={handleInputChange} />
+              </Field>
+              <Field label="Gender" htmlFor="gender">
+                <select id="gender" name="gender" value={updateData.profile.gender} onChange={handleInputChange} className={selectClass}>
+                  <option value="">Select</option>
+                  {['male', 'female', 'other'].map((opt) => (
+                    <option key={opt} value={opt} className="capitalize">{opt}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Phone number" htmlFor="phoneNumber">
+                <Input id="phoneNumber" type="tel" name="phoneNumber" value={updateData.phoneNumber} onChange={handleInputChange} />
+              </Field>
+              <div className="md:col-span-2">
+                <Field label="Address" htmlFor="address">
+                  <Textarea id="address" name="address" value={updateData.profile.address} onChange={handleInputChange} rows={3} />
+                </Field>
+              </div>
+            </div>
+          </Section>
+
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" onClick={handleCancelEdit}>Cancel</Button>
+            <Button type="submit" disabled={updating}>{updating ? 'Updating…' : 'Save changes'}</Button>
+          </div>
+        </form>
+      ) : null}
     </div>
   );
 }
 
-/* ---------- UI atoms (kept simple, no functionality changes) ---------- */
+const selectClass =
+  'h-10 w-full min-w-0 rounded-lg border border-input bg-card px-3 text-sm capitalize shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20';
 
-const SectionCard = ({
-  title,
-  children,
-  className = '',
-}: { title: string; children: React.ReactNode; className?: string }) => (
-  <section className={`rounded-2xl border border-black/5 bg-white/80 p-6 shadow-xl backdrop-blur ${className}`}>
-    <header className="mb-4">
-      <h3 className="text-base font-semibold text-gray-800">{title}</h3>
-      <div className="mt-2 h-px w-full bg-gradient-to-r from-transparent via-black/10 to-transparent" />
-    </header>
-    <div className="grid gap-4">{children}</div>
-  </section>
+const Field = ({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) => (
+  <div className="space-y-1.5">
+    <label htmlFor={htmlFor} className="text-sm font-medium text-slate-700">{label}</label>
+    {children}
+  </div>
 );
 
-const Info = ({ label, value, badge, status }: { label: string; value?: string | null; badge?: boolean | null; status?: boolean }) => (
-  <div>
-    <label className="block text-xs font-medium uppercase tracking-wide text-gray-500">{label}</label>
-    <p className="mt-1 text-[15px] font-medium text-gray-900">{value || 'Not provided'}</p>
-
-    {badge !== undefined && (
+const Info = ({ label, value, badge }: { label: string; value?: string | null; badge?: boolean | null }) => (
+  <div className="min-w-0">
+    <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</dt>
+    <dd className="mt-1 break-words text-[15px] font-medium text-slate-900">{value || 'Not provided'}</dd>
+    {badge !== undefined ? (
       <span
-        className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ring-1 ${badge
-          ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-          : 'bg-amber-50 text-amber-700 ring-amber-200'
-          }`}
+        className={cn(
+          'mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset',
+          badge ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' : 'bg-amber-50 text-amber-700 ring-amber-600/20',
+        )}
       >
-        <Dot ok={!!badge} />
+        <span className={cn('size-1.5 rounded-full', badge ? 'bg-emerald-500' : 'bg-amber-500')} aria-hidden />
         {badge ? 'Verified' : 'Not verified'}
       </span>
-    )}
-
-    {status && (
-      <span
-        className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs capitalize ring-1 ${value === 'active'
-          ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-          : value === 'pending'
-            ? 'bg-amber-50 text-amber-700 ring-amber-200'
-            : 'bg-rose-50 text-rose-700 ring-rose-200'
-          }`}
-      >
-        <Dot ok={value === 'active'} />
-        {value}
-      </span>
-    )}
+    ) : null}
   </div>
-);
-
-const Input = ({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700">{label}</label>
-    <input
-      {...props}
-      className="mt-1 h-11 w-full rounded-xl border border-gray-300 bg-white px-3 shadow-sm outline-none ring-0 transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-    />
-  </div>
-);
-
-const Select = ({ label, options, ...props }: { label: string; options: string[] } & React.SelectHTMLAttributes<HTMLSelectElement>) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700">{label}</label>
-    <select
-      {...props}
-      className="mt-1 h-11 w-full rounded-xl border border-gray-300 bg-white px-3 shadow-sm outline-none ring-0 transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-    >
-      <option value="">Select</option>
-      {options.map((opt: string) => (
-        <option key={opt} value={opt} className="capitalize">
-          {opt}
-        </option>
-      ))}
-    </select>
-  </div>
-);
-
-const Textarea = ({ label, ...props }: { label: string } & React.TextareaHTMLAttributes<HTMLTextAreaElement>) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700">{label}</label>
-    <textarea
-      {...props}
-      className="mt-1 w-full rounded-xl border border-gray-300 bg-white p-3 shadow-sm outline-none ring-0 transition focus:border-[var(--brand)] focus:ring-2 focus:ring-[var(--brand)]"
-    />
-  </div>
-);
-
-const Dot = ({ ok }: { ok: boolean }) => (
-  <svg width="10" height="10" viewBox="0 0 10 10" className="inline-block">
-    <circle cx="5" cy="5" r="4" className={ok ? 'fill-emerald-500' : 'fill-amber-500'} />
-  </svg>
 );

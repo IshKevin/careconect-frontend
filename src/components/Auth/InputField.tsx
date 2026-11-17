@@ -1,5 +1,7 @@
 import { FieldError, UseFormRegister } from 'react-hook-form';
-import React from 'react';
+import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface InputFieldProps {
   label: string;
@@ -9,48 +11,51 @@ interface InputFieldProps {
   register: UseFormRegister<any>;
   error?: FieldError;
   required?: boolean;
+  placeholder?: string;
+  autoComplete?: string;
 }
 
-export function InputField({ label, name, type, register, error, required }: InputFieldProps) {
+export function InputField({ label, name, type, register, error, required, placeholder, autoComplete }: InputFieldProps) {
+  const [show, setShow] = useState(false);
+  const isPassword = type === 'password';
+
   return (
-    <div className="mb-4">
-      <label
-        htmlFor={name}
-        className="mb-1 block text-sm font-medium text-gray-800"
-      >
-        {label} {required && <span className="text-red-500">*</span>}
+    <div>
+      <label htmlFor={name} className="mb-1.5 block text-sm font-medium text-slate-700">
+        {label}
+        {required ? <span className="text-rose-500"> *</span> : null}
       </label>
-
-      <div
-        className={[
-          'group relative rounded-xl border bg-white/80 transition',
-          error ? 'border-red-300 ring-1 ring-red-300' : 'border-black/10 hover:border-black/20',
-          'focus-within:border-[var(--brand)]/60 focus-within:ring-2 focus-within:ring-[var(--brand)]/50',
-        ].join(' ')}
-      >
-        {/* optional decorative icon area (kept empty to avoid functional change) */}
-        <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-50">
-          {/* you can drop an inline SVG here if you like */}
-        </div>
-
+      <div className="relative">
         <input
-          type={type}
+          type={isPassword && show ? 'text' : type}
           id={name}
+          placeholder={placeholder}
+          autoComplete={autoComplete}
           {...register(name, { required: required ? `${label} is required` : false })}
-          className={[
-            'w-full rounded-xl bg-transparent px-3 py-2.5 outline-none',
-            // add left padding only if you place an icon above (e.g. pl-10)
-            'text-gray-900 placeholder:text-gray-400',
-          ].join(' ')}
+          className={cn(
+            'block h-11 w-full rounded-xl border bg-white px-3.5 text-sm text-slate-900 shadow-xs transition placeholder:text-slate-400 focus:outline-none focus:ring-4',
+            error ? 'border-rose-300 focus:border-rose-400 focus:ring-rose-500/15' : 'border-input focus:border-ring focus:ring-ring/15',
+            isPassword && 'pr-11',
+          )}
           aria-invalid={!!error}
+          aria-describedby={error ? `${name}-error` : undefined}
         />
+        {isPassword ? (
+          <button
+            type="button"
+            onClick={() => setShow((v) => !v)}
+            className="absolute inset-y-0 right-0 grid w-11 place-items-center text-slate-400 hover:text-slate-600"
+            aria-label={show ? 'Hide password' : 'Show password'}
+          >
+            {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        ) : null}
       </div>
-
-      {error && (
-        <p className="mt-1 text-sm text-red-600">
+      {error ? (
+        <p id={`${name}-error`} className="mt-1.5 text-xs text-rose-600">
           {error.message}
         </p>
-      )}
+      ) : null}
     </div>
   );
 }

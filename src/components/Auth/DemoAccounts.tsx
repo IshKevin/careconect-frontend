@@ -21,10 +21,13 @@ export function DemoAccounts() {
   if (!SHOW_DEMO_ACCOUNTS) return null;
 
   return (
-    <section className="mt-6 rounded-2xl border border-dashed border-gray-300 bg-white/70 p-4" aria-labelledby="demo-accounts">
-      <h2 id="demo-accounts" className="text-sm font-semibold text-gray-900">Try a demo account</h2>
-      <p className="mt-1 text-xs text-gray-600">
-        Shared sample accounts with sample data. Password for all: <code className="rounded bg-gray-100 px-1">{DEMO_PASSWORD}</code>. Do not enter real health information.
+    <section className="rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50/80 to-white p-4" aria-labelledby="demo-accounts">
+      <div className="flex items-center justify-between gap-2">
+        <h2 id="demo-accounts" className="text-sm font-semibold text-slate-900">Try a demo account</h2>
+        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-brand-700 ring-1 ring-brand-200">One click</span>
+      </div>
+      <p className="mt-1 text-xs text-slate-500">
+        Shared sample accounts with sample data. Password for all: <code className="rounded bg-white px-1 font-mono text-slate-700 ring-1 ring-slate-200">{DEMO_PASSWORD}</code>. Please do not enter real health information.
       </p>
       <div className="mt-3 grid grid-cols-2 gap-2">
         {ACCOUNTS.map((account) => (
@@ -33,15 +36,15 @@ export function DemoAccounts() {
             type="button"
             disabled={loading}
             onClick={() => handleAuth({ email: account.email, password: DEMO_PASSWORD }, 'login')}
-            className="rounded-xl border border-black/10 bg-white px-3 py-2 text-left transition hover:bg-gray-50 disabled:opacity-60"
+            className="group rounded-xl border border-border bg-white px-3 py-2.5 text-left shadow-xs transition hover:-translate-y-px hover:border-brand-300 hover:shadow-sm disabled:opacity-60"
             title={account.email}
           >
-            <span className="block text-sm font-medium text-gray-900">{account.role}</span>
-            <span className="block text-xs text-gray-600">{account.note}</span>
+            <span className="block text-sm font-semibold text-slate-900 group-hover:text-brand-700">{account.role}</span>
+            <span className="block text-xs text-slate-500">{account.note}</span>
           </button>
         ))}
       </div>
-      {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="mt-2 text-sm text-rose-600">{error}</p> : null}
     </section>
   );
 }
