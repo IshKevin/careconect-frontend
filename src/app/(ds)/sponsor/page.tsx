@@ -176,7 +176,16 @@ export default function SponsorDashboardPage() {
       </Section>
 
       <div className="grid gap-6 lg:grid-cols-5">
-        <Section title="Recent invoices" className="lg:col-span-3" flush>
+        <Section
+          title="Recent invoices"
+          className="lg:col-span-3"
+          flush
+          action={
+            <Button asChild size="sm" variant={summary.pendingCount > 0 ? 'default' : 'outline'}>
+              <Link href="/sponsor/invoices">{summary.pendingCount > 0 ? `Pay invoices (${summary.pendingCount})` : 'All invoices'}</Link>
+            </Button>
+          }
+        >
           {data.invoices.recent.length === 0 ? (
             <Empty icon={Receipt}>No invoices for your patients yet.</Empty>
           ) : (
