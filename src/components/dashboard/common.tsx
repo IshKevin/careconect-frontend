@@ -203,7 +203,7 @@ export function Empty({ children, icon: Icon = Inbox, action }: { children: Reac
 /** Consistent table styling: wrap a <table> in this. */
 export function DataTable({ children }: { children: ReactNode }) {
   return (
-    <div className="-mx-px overflow-x-auto">
+    <div className="relative -mx-px overflow-x-auto">
       <table className="w-full text-left text-sm [&_tbody_tr]:border-t [&_tbody_tr]:border-border [&_tbody_tr:hover]:bg-slate-50/70 [&_td]:px-5 [&_td]:py-3 [&_td]:align-middle [&_th]:bg-slate-50/80 [&_th]:px-5 [&_th]:py-2.5 [&_th]:text-xs [&_th]:font-medium [&_th]:uppercase [&_th]:tracking-wide [&_th]:text-slate-500">
         {children}
       </table>
