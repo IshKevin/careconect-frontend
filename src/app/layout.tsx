@@ -4,7 +4,7 @@ import { AuthProvider } from '@/lib/api/auth';
 import Providers from '@/components/Providers';
 
 export const metadata: Metadata = {
-  title: "Nexus Care - Healthcare Management System",
+  title: "IsanoMed - Healthcare in Rwanda",
   description: "A comprehensive healthcare management platform connecting patients, doctors, and administrators",
 };
 

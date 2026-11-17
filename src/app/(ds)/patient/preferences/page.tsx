@@ -21,10 +21,9 @@ export default function PreferencesPage() {
       setLoading(true);
       setError(null);
       try {
-        const response = (await api.get('/patient/preferences')) as { data?: Preferences } | null;
-        // Our api.get returns response.data. If the backend wraps it again:
-        const data = response?.data ?? response;
-        setPreferences(data as unknown as Preferences);
+        const response = await api.get<{ success: boolean; data: Preferences | null }>('/patient/preferences');
+        // The API answers { success, data }; data is null until the patient saves preferences.
+        setPreferences(response.data?.data ?? null);
       } catch (err: unknown) {
         console.error('Fetch preferences error:', err);
       } finally {

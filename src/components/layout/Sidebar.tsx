@@ -113,7 +113,7 @@ export default function Sidebar() {
           </div>
           <div className="flex flex-col">
             <h2 className="text-lg font-semibold tracking-tight text-gray-900">
-              Nexus Care
+              IsanoMed
             </h2>
             <span className="text-xs text-gray-500">
               {user?.userType ? user.userType.charAt(0).toUpperCase() + user.userType.slice(1) : 'Welcome'}

@@ -42,7 +42,7 @@ export default function Footer() {
                     N
                   </div>
                   <span className="text-xl font-extrabold tracking-tight drop-shadow-md">
-                    Nexus Care
+                    IsanoMed
                   </span>
                 </div>
                 <p className="text-white/95 mb-5 max-w-md leading-relaxed">
@@ -124,7 +124,7 @@ export default function Footer() {
               </div>
 
               <p className="text-sm text-white/85">
-                © {year} <span className="font-semibold">Nexus Care</span>. All
+                © {year} <span className="font-semibold">IsanoMed</span>. All
                 rights reserved.
               </p>
             </div>

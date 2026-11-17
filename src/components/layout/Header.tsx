@@ -65,7 +65,7 @@ export default function Header() {
                 <span className="font-extrabold text-lg">N</span>
               </div>
               <span className="text-xl font-extrabold tracking-tight text-gray-900 dark:text-white">
-                Nexus Care
+                IsanoMed
               </span>
             </Link>
           </div>

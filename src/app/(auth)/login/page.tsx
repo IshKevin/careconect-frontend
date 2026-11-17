@@ -1,6 +1,7 @@
 'use client';
 
 import { AuthForm } from '@/components/Auth/AuthForm';
+import { DemoAccounts } from '@/components/Auth/DemoAccounts';
 import Link from 'next/link';
 import { useMemo } from 'react';
 
@@ -176,6 +177,8 @@ export default function LoginPage() {
                 </Link>
               </div>
             </div>
+
+            <DemoAccounts />
 
             {/* footer note */}
             <p className="mt-6 text-center text-xs text-gray-500">

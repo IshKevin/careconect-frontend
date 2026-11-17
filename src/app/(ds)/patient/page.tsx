@@ -4,6 +4,7 @@ import React, { useMemo } from "react";
 import { useAuth } from "@/lib/api/auth";
 import { useMyAppointments } from "@/hooks/useAppointments";
 import { useMedications } from "@/hooks/usePatient";
+import { useInvoices } from "@/hooks/usePayments";
 import { format } from "date-fns";
 
 export default function Page() {
@@ -12,6 +13,7 @@ export default function Page() {
   // Fetch real data
   const { data: appointments, isLoading: isLoadingAppts } = useMyAppointments();
   const { data: medications, isLoading: isLoadingMeds } = useMedications();
+  const { data: invoices } = useInvoices(user?.userId ?? "");
 
   // Calculate stats based on real data
   const stats = useMemo(
@@ -21,10 +23,18 @@ export default function Page() {
         value: appointments?.filter(a => new Date(a.scheduledDate) > new Date()).length || 0,
         sub: "appointments"
       },
-      { label: "Unread", value: 3, sub: "messages" }, // Placeholder as no message API yet
-      { label: "Invoices", value: 1, sub: "due" }, // Placeholder
+      {
+        label: "Completed",
+        value: appointments?.filter(a => (a.appointmentStatus ?? a.status) === "completed").length || 0,
+        sub: "visits"
+      },
+      {
+        label: "Invoices",
+        value: invoices?.filter(i => (i.invoiceStatus ?? i.status) === "pending").length || 0,
+        sub: "due"
+      },
     ],
-    [appointments]
+    [appointments, invoices]
   );
 
   const nextAppt = useMemo(() => {
@@ -41,8 +51,8 @@ export default function Page() {
       date: `${format(new Date(upcoming.scheduledDate), "EEE, MMM d")} • ${upcoming.scheduledTime}`,
       doctor: upcoming.doctor ? `Dr. ${upcoming.doctor.lastName}` : "Doctor",
       specialty: upcoming.doctor?.specialty || "General Practice",
-      location: "Kigali General Hospital", // Placeholder location
-      status: upcoming.status,
+      location: upcoming.appointmentType === "telemedicine" ? "Video consultation (join from Appointments)" : "In person at the clinic",
+      status: (upcoming.appointmentStatus ?? upcoming.status ?? "").replace("_", " "),
       notes: upcoming.notes || "No additional notes.",
     };
   }, [appointments]);

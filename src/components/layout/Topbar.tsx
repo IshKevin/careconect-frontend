@@ -51,7 +51,7 @@ export default function Topbar() {
             </div>
             <div className="flex flex-col">
               <h1 className="text-lg font-semibold tracking-tight text-gray-900">
-                Nexus Care
+                IsanoMed
               </h1>
               <span className="hidden text-xs text-gray-500 sm:inline">
                 Your health, connected

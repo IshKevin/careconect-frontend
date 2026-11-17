@@ -2,12 +2,14 @@ export interface Appointment {
     appointmentId: string;
     patientId: string;
     doctorId: string;
-    appointmentType: 'consultation' | 'follow-up' | 'checkup';
+    appointmentType: 'consultation' | 'follow-up' | 'checkup' | 'follow_up' | 'emergency' | 'telemedicine' | 'routine_checkup';
     scheduledDate: string;
     scheduledTime: string;
     reason: string;
     notes?: string;
     status: 'scheduled' | 'completed' | 'cancelled' | 'rescheduled';
+    // What the API actually returns (status above is kept for older screens).
+    appointmentStatus?: 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'rescheduled' | 'no_show';
     doctor?: {
         firstName: string;
         lastName: string;

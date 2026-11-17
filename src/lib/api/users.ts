@@ -6,8 +6,9 @@ import {
     UpdateUserStatusRequest
 } from '../../types/user';
 
+// The API wraps the user in { success, data }.
 export const getUserProfile = async () => {
-    return (await api.get<User>('/users/profile')).data;
+    return (await api.get<{ success: boolean; data: User }>('/users/profile')).data.data;
 };
 
 export const updateUserProfile = async (data: UpdateUserProfileRequest) => {

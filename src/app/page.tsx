@@ -40,7 +40,7 @@ export default function Home() {
           <h1 className="mt-6 text-5xl md:text-6xl font-extrabold tracking-tight leading-tight text-gray-900 dark:text-white">
             Welcome to <br />
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-teal-600 to-emerald-500">
-              Nexus Care;
+              IsanoMed
             </span>{" "}
             <br />
             Your Health, <br />
@@ -58,7 +58,7 @@ export default function Home() {
               className="px-8 py-4 text-lg text-white shadow-lg shadow-teal-600/20 hover:shadow-teal-600/30 transition-shadow
                          bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700
                          focus-visible:ring-2 focus-visible:ring-teal-500"
-              aria-label="Register for Nexus Care"
+              aria-label="Register for IsanoMed"
             >
               <Link href="/register">
                 Register
@@ -85,7 +85,7 @@ export default function Home() {
           <div className="relative rounded-[1.6rem] overflow-hidden">
             <Image
               src="/assets/hero-image.jpg"
-              alt="Patient consulting a doctor via Nexus Care"
+              alt="Patient consulting a doctor via IsanoMed"
               width={900}
               height={700}
               priority
@@ -236,7 +236,7 @@ export default function Home() {
               <div className="relative rounded-[1.6rem] overflow-hidden">
                 <Image
                   src="/assets/hero-image.jpg"
-                  alt="Contact Nexus Care team"
+                  alt="Contact IsanoMed team"
                   width={900}
                   height={700}
                   className="object-cover w-full h-96"

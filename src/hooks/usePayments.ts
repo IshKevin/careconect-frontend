@@ -14,6 +14,7 @@ export type Invoice = {
   dueDate?: string; // ISO
   createdAt?: string; // ISO
   status?: 'paid' | 'unpaid' | 'overdue' | string;
+  invoiceStatus?: 'pending' | 'paid' | 'cancelled' | 'refunded';
   paidAt?: string; // ISO
   pdfUrl?: string;
   notes?: string;

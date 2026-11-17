@@ -145,7 +145,7 @@ export default function NotFound() {
                   </Button>
                 </Link>
 
-                <Link href="/contact" className="w-full sm:w-auto group/support">
+                <Link href="mailto:support@isanomed.org" className="w-full sm:w-auto group/support">
                   <Button
                     variant="outline"
                     className="w-full sm:w-auto border-2 border-teal-300/40 text-white hover:bg-teal-500/20 hover:border-teal-300 backdrop-blur-xl px-6 sm:px-10 py-4 sm:py-5 rounded-xl sm:rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-500 hover:scale-105 sm:hover:scale-110 group-hover/support:border-teal-300 relative overflow-hidden text-sm sm:text-lg"
